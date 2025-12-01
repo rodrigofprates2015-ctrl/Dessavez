@@ -972,7 +972,7 @@ const PerguntasDiferentesScreen = () => {
 };
 
 const GameScreen = () => {
-  const { user, room, returnToLobby, speakingOrder, setSpeakingOrder, showSpeakingOrderWheel, setShowSpeakingOrderWheel } = useGameStore();
+  const { user, room, returnToLobby, speakingOrder, setSpeakingOrder, showSpeakingOrderWheel, setShowSpeakingOrderWheel, triggerSpeakingOrderWheel } = useGameStore();
   const [isRevealed, setIsRevealed] = useState(false);
   const [showAdPopup, setShowAdPopup] = useState(false);
 
@@ -986,7 +986,7 @@ const GameScreen = () => {
   };
 
   const handleStartSorteio = () => {
-    setShowSpeakingOrderWheel(true);
+    triggerSpeakingOrderWheel();
   };
 
   if (!room) return null;

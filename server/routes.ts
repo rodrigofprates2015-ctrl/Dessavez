@@ -224,6 +224,13 @@ export async function registerRoutes(
             broadcastToRoom(roomCode, { type: 'room-update', room: updatedRoom });
           }
         }
+
+        // Handle trigger speaking order wheel - broadcast to all players in room
+        if (data.type === 'trigger-speaking-order' && data.roomCode) {
+          const roomCode = data.roomCode as string;
+          // Broadcast to all players to show the spinning wheel simultaneously
+          broadcastToRoom(roomCode, { type: 'start-speaking-order-wheel' });
+        }
       } catch (error) {
         console.error('WebSocket error:', error);
       }

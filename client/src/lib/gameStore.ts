@@ -203,6 +203,9 @@ export const useGameStore = create<GameState>((set, get) => ({
             message: `${data.newHostName} agora é o host da sala`
           });
         }
+        if (data.type === 'start-speaking-order-wheel') {
+          get().setShowSpeakingOrderWheel(true);
+        }
       } catch (error) {
         console.error('WebSocket message error:', error);
       }
@@ -412,5 +415,19 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   setShowSpeakingOrderWheel: (show: boolean) => {
     set({ showSpeakingOrderWheel: show });
+  },
+
+  triggerSpeakingOrderWheel: () => {
+    const { room, ws, user } = get();
+    if (!room || !user || !ws || ws.readyState !== WebSocket.OPEN) return;
+    
+    // Only host can trigger
+    if (room.hostId !== user.uid) return;
+    
+    // Send message to server to broadcast to all players
+    ws.send(JSON.stringify({
+      type: 'trigger-speaking-order',
+      roomCode: room.code
+    }));
   }
 }));
