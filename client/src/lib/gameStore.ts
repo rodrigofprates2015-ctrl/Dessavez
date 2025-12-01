@@ -225,6 +225,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     let newStatus: GameStatus = 'lobby';
     let enteredDuringGame = false;
+    let selectedMode = get().selectedMode;
     
     // Check if player just entered a room that's already playing
     if (room.status === 'playing' && (!currentRoom || currentRoom.code !== room.code)) {
@@ -233,11 +234,17 @@ export const useGameStore = create<GameState>((set, get) => ({
     } else if (room.status === 'playing') {
       newStatus = 'playing';
     }
+    
+    // Reset selectedMode when room is reset to waiting (Nova Rodada)
+    if (room.status === 'waiting') {
+      selectedMode = null;
+    }
 
     set({ 
       room,
       status: newStatus,
       enteredDuringGame,
+      selectedMode,
     });
   },
 
