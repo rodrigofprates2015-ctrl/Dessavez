@@ -3,6 +3,15 @@
 This is a multiplayer social deduction game branded as **TikJogos**. Players join game rooms and try to identify who among them is the impostor through various game modes involving secret words, locations, roles, and questions. The application is built as a full-stack web application with real-time multiplayer capabilities.
 
 ## Recent Changes (December 2025)
+- **Redesigned Game Role Reveal Screens** - New visual design for Tripulante/Impostor screens based on user mockups
+  - Tripulante: Teal/cyan gradient background with cyan border, astronaut image showing head/helmet
+  - Impostor: Dark red gradient background with red border, impostor astronaut image
+  - Character images cropped to show head/helmet with proper spacing
+  - "Toque para esconder" hint below content
+  - Home button at top for all players
+  - Host-only buttons: "Sortear Ordem de Fala" and "Nova Rodada"
+  - Perguntas Diferentes mode keeps separate design
+- **Fixed Speaking Order Wheel Synchronization** - Order now generated server-side and broadcast to all players
 - **Fixed "Perguntas Diferentes" Mode Bug** - Mode now correctly shows PerguntasDiferentesScreen instead of generic GameScreen
   - Root cause: selectMode() was setting status to 'playing' immediately before the game started on the server
   - Fix: Status now stays at 'modeSelect' until server confirms game start via WebSocket
