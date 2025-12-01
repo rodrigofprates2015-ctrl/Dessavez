@@ -87,10 +87,22 @@ function shuffleArray<T>(array: T[]): T[] {
   return arr;
 }
 
-function setupGameMode(mode: GameModeType, players: Player[], impostorId: string): GameData {
+// Submode words for Palavra Secreta
+const PALAVRA_SECRETA_SUBMODES_DATA: Record<string, string[]> = {
+  classico: ['Sol', 'Carro', 'Casa', 'Cachorro', 'Computador', 'Montanha', 'Pizza', 'Escola', 'Roupa', 'Avião', 'Janela', 'Telefone', 'Bola', 'Relógio', 'Flor', 'Gelo', 'Música', 'Prédio', 'Caminhão', 'Praia'],
+  clashRoyale: ['Mago', 'Príncipe', 'Mosqueteira', 'Gigante', 'Arqueiras', 'Corredor', 'P.E.K.K.A', 'Golem', 'Dragão Bebê', 'Bruxa', 'Mineiro', 'Cavaleiro', 'Barril de Goblins', 'Tronco', 'Tesla', 'Lava Hound', 'Lenhador', 'Fantasma Real', 'Mago de Gelo', 'Executor'],
+  animes: ['Goku', 'Naruto', 'Luffy', 'Tanjiro', 'Mikasa', 'Saitama', 'Sasuke', 'Deku', 'Gojo', 'Ichigo', 'Sharingan', 'Bankai', 'Kamehameha', 'Rasengan', 'Titan', 'Shinigami', 'Chakra', 'Espada Nichirin', 'Akatsuki', 'Grimório'],
+  marvel: ['Homem-Aranha', 'Thor', 'Hulk', 'Capitão América', 'Homem de Ferro', 'Viúva Negra', 'Pantera Negra', 'Doutor Estranho', 'Thanos', 'Loki', 'Ultron', 'Groot', 'Rocket', 'Wanda', 'Visão', 'Escudo', 'Mjölnir', 'Joia do Infinito', 'Hydra', 'Vibranium'],
+  strangerThings: ['Eleven', 'Mike', 'Lucas', 'Dustin', 'Will', 'Max', 'Hopper', 'Joyce', 'Vecna', 'Demogorgon', 'Mind Flayer', 'Hawkins', 'Upside Down', 'Barb', 'Robin', 'Steve', 'Billy', 'Eddie', 'Murray', 'Kali', 'Brenner', 'Suzie', 'Erica', 'Laboratório', 'Neva', 'Walkie-talkie', 'Arcade', 'Starcourt', 'Hellfire', 'Byers']
+};
+
+function setupGameMode(mode: GameModeType, players: Player[], impostorId: string, selectedSubmode?: string): GameData {
   switch (mode) {
     case "palavraSecreta": {
-      return { word: getRandomItem(GAME_MODES.palavraSecreta.data) };
+      // Use submode words if provided, otherwise use default list
+      const submode = selectedSubmode || 'classico';
+      const words = PALAVRA_SECRETA_SUBMODES_DATA[submode] || GAME_MODES.palavraSecreta.data;
+      return { word: getRandomItem(words) };
     }
     
     case "palavras": {
@@ -293,8 +305,9 @@ export async function registerRoutes(
   app.post("/api/rooms/:code/start", async (req, res) => {
     try {
       const { code } = req.params;
-      const { gameMode } = z.object({
-        gameMode: z.enum(["palavraSecreta", "palavras", "duasFaccoes", "categoriaItem", "perguntasDiferentes"])
+      const { gameMode, selectedSubmode } = z.object({
+        gameMode: z.enum(["palavraSecreta", "palavras", "duasFaccoes", "categoriaItem", "perguntasDiferentes"]),
+        selectedSubmode: z.string().optional()
       }).parse(req.body);
       
       const room = await storage.getRoom(code.toUpperCase());
@@ -311,7 +324,7 @@ export async function registerRoutes(
       const impostorIndex = Math.floor(Math.random() * players.length);
       const impostorId = players[impostorIndex].uid;
       
-      const gameData = setupGameMode(gameMode, players, impostorId);
+      const gameData = setupGameMode(gameMode, players, impostorId, selectedSubmode);
       
       const modeInfo = GAME_MODES[gameMode];
 

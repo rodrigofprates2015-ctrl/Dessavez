@@ -257,10 +257,20 @@ export const useGameStore = create<GameState>((set, get) => ({
     if (!room || !selectedMode) return;
 
     try {
+      const requestBody: any = { gameMode: selectedMode };
+      
+      // If Palavra Secreta, add the selected submode
+      if (selectedMode === 'palavraSecreta') {
+        const submode = localStorage.getItem('selectedSubmode');
+        if (submode) {
+          requestBody.selectedSubmode = submode;
+        }
+      }
+
       const response = await fetch(`/api/rooms/${room.code}/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ gameMode: selectedMode }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) throw new Error('Failed to start game');

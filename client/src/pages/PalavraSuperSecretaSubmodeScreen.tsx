@@ -8,14 +8,9 @@ const PalavraSuperSecretaSubmodeScreen = () => {
   const isHost = room && user && room.hostId === user.uid;
 
   const handleSelectSubmode = (submode: PalavraSuperSecretaSubmode) => {
-    const submodeData = PALAVRA_SECRETA_SUBMODES[submode];
-    const randomWord = submodeData.words[Math.floor(Math.random() * submodeData.words.length)];
-    
-    // Store submode and word in game state
-    localStorage.setItem('selectedSubmode', submode);
-    localStorage.setItem('palavraSecretaWord', randomWord);
-    
     if (isHost) {
+      // Store submode for startGame to use
+      localStorage.setItem('selectedSubmode', submode);
       startGame();
     }
   };
