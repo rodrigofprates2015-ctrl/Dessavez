@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useGameStore, type GameModeType } from "@/lib/gameStore";
 import { Link } from "wouter";
 import PalavraSuperSecretaSubmodeScreen from "@/pages/PalavraSuperSecretaSubmodeScreen";
+import { SpeakingOrderWheel } from "@/components/SpeakingOrderWheel";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import { 
   User, 
@@ -512,14 +513,43 @@ const LobbyScreen = () => {
 };
 
 const ModeSelectScreen = () => {
-  const { room, user, gameModes, selectedMode, selectMode, startGame, backToLobby, fetchGameModes } = useGameStore();
+  const { room, user, gameModes, selectedMode, selectMode, startGame, backToLobby, fetchGameModes, showSpeakingOrderWheel, speakingOrder, setSpeakingOrder, setShowSpeakingOrderWheel } = useGameStore();
   const { toast } = useToast();
+  const [isStarting, setIsStarting] = useState(false);
 
   const isHost = room && user && room.hostId === user.uid;
 
   useEffect(() => {
     fetchGameModes();
   }, [fetchGameModes]);
+
+  const handleStartGameWithSorteio = async () => {
+    if (!selectedMode || !room) return;
+    
+    setIsStarting(true);
+    setShowSpeakingOrderWheel(true);
+    
+    // Esperar a animação completar antes de chamar startGame
+    setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/rooms/${room.code}/speaking-order`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          setSpeakingOrder(data.speakingOrder);
+        }
+      } catch (error) {
+        console.error('Erro ao sortear ordem de fala:', error);
+      }
+      
+      // Depois sortear, chamar startGame
+      await startGame();
+      setIsStarting(false);
+    }, 100);
+  };
 
   const handleBackClick = () => {
     backToLobby();
@@ -587,12 +617,23 @@ const ModeSelectScreen = () => {
       </div>
 
       <Button 
-        onClick={startGame}
-        disabled={!selectedMode}
+        onClick={handleStartGameWithSorteio}
+        disabled={!selectedMode || isStarting}
         className="w-full h-16 btn-neon-filled font-bold text-lg rounded-lg transition-all active:scale-[0.98] disabled:opacity-30 disabled:cursor-not-allowed"
       >
         <Rocket className="mr-2" /> INICIAR PARTIDA
       </Button>
+      
+      {showSpeakingOrderWheel && room && (
+        <SpeakingOrderWheel 
+          players={room.players} 
+          onComplete={(order) => {
+            setSpeakingOrder(order);
+            setShowSpeakingOrderWheel(false);
+          }}
+          isSpinning={true}
+        />
+      )}
     </div>
   );
 };

@@ -59,6 +59,8 @@ export type GameState = {
   notifications: Array<{ id: string; type: 'player-left' | 'host-changed'; message: string }>;
   enteredDuringGame: boolean;
   savedNickname: string | null;
+  speakingOrder: string[] | null;
+  showSpeakingOrderWheel: boolean;
   
   setUser: (name: string) => void;
   saveNickname: (name: string) => void;
@@ -76,6 +78,8 @@ export type GameState = {
   updateRoom: (room: Room) => void;
   fetchGameModes: () => Promise<void>;
   revealQuestion: () => Promise<void>;
+  setSpeakingOrder: (order: string[]) => void;
+  setShowSpeakingOrderWheel: (show: boolean) => void;
   addNotification: (notification: { type: 'player-left' | 'host-changed'; message: string }) => void;
   removeNotification: (id: string) => void;
 };
@@ -96,6 +100,8 @@ export const useGameStore = create<GameState>((set, get) => ({
   notifications: [],
   enteredDuringGame: false,
   savedNickname: null,
+  speakingOrder: null,
+  showSpeakingOrderWheel: false,
 
   setUser: (name: string) => {
     const uid = generateUID();
@@ -398,5 +404,13 @@ export const useGameStore = create<GameState>((set, get) => ({
     } catch (error) {
       console.error('Error revealing question:', error);
     }
+  },
+
+  setSpeakingOrder: (order: string[]) => {
+    set({ speakingOrder: order });
+  },
+
+  setShowSpeakingOrderWheel: (show: boolean) => {
+    set({ showSpeakingOrderWheel: show });
   }
 }));

@@ -420,6 +420,25 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/rooms/:code/speaking-order", async (req, res) => {
+    try {
+      const { code } = req.params;
+      
+      const room = await storage.getRoom(code.toUpperCase());
+      if (!room) {
+        return res.status(404).json({ error: "Room not found" });
+      }
+
+      const players = (room.players || []) as Player[];
+      const shuffled = players.sort(() => Math.random() - 0.5);
+      const speakingOrder = shuffled.slice(0, Math.min(3, players.length)).map(p => p.uid);
+      
+      res.json({ speakingOrder });
+    } catch (error) {
+      res.status(400).json({ error: "Failed to generate speaking order" });
+    }
+  });
+
   app.post("/api/rooms/:code/reveal-question", async (req, res) => {
     try {
       const { code } = req.params;
