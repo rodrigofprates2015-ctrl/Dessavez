@@ -426,19 +426,22 @@ const LobbyScreen = () => {
 
   return (
     <div className="flex flex-col w-full max-w-md h-full py-6 px-4 animate-fade-in relative z-10">
+      {/* Overlay escuro para contraste */}
+      <div className="absolute inset-0 bg-[#0a1628]/90 -z-10 rounded-2xl"></div>
+      
       <div className="w-full flex justify-between items-center mb-6 border-b border-[#3d4a5c] pb-4">
         <div onClick={copyLink} className="cursor-pointer group">
-          <p className="text-gray-600 text-[10px] uppercase tracking-widest mb-1 group-hover:text-[#e07b39] transition-colors">Código da Sala</p>
+          <p className="text-gray-300 text-[10px] uppercase tracking-widest mb-1 group-hover:text-[#e07b39] transition-colors">Código da Sala</p>
           <h2 className="text-4xl font-black tracking-widest font-mono flex items-center gap-3">
             <span className="text-[#e07b39]" data-testid="text-room-code">{room.code}</span>
-            <Copy className="w-4 h-4 text-gray-600 group-hover:text-[#e07b39] transition-colors" />
+            <Copy className="w-4 h-4 text-gray-300 group-hover:text-[#e07b39] transition-colors" />
           </h2>
         </div>
         <Button 
           variant="ghost" 
           size="icon"
           onClick={leaveGame}
-          className="w-10 h-10 rounded-xl border-2 border-[#3d4a5c] hover:border-[#c44536] hover:bg-[#c44536]/10 text-gray-500 hover:text-[#c44536] transition-all"
+          className="w-10 h-10 rounded-xl border-2 border-[#3d4a5c] hover:border-[#c44536] hover:bg-[#c44536]/10 text-gray-300 hover:text-[#c44536] transition-all"
           data-testid="button-leave-room"
         >
           <LogOut className="w-5 h-5" />
@@ -446,7 +449,7 @@ const LobbyScreen = () => {
       </div>
 
       <div className="flex-1 w-full card-retro p-4 mb-4 overflow-y-auto scrollbar-hide">
-        <h3 className="text-gray-500 text-xs font-bold uppercase mb-4 flex items-center gap-2 tracking-widest">
+        <h3 className="text-gray-300 text-xs font-bold uppercase mb-4 flex items-center gap-2 tracking-widest">
           Tripulantes ({players.length})
           <span className="flex-1 h-[1px] bg-[#3d4a5c]"></span>
         </h3>
@@ -497,7 +500,7 @@ const LobbyScreen = () => {
             <div className="w-2 h-2 bg-[#e9c46a] rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
           </div>
           <p className="text-sm font-medium">Aguardando próxima rodada...</p>
-          <p className="text-xs text-gray-400">Você entrará quando a rodada começar</p>
+          <p className="text-xs text-gray-300">Você entrará quando a rodada começar</p>
         </div>
       ) : isHost ? (
         <div className="w-full animate-fade-in">
@@ -514,7 +517,7 @@ const LobbyScreen = () => {
           )}
         </div>
       ) : (
-        <div className="w-full text-center text-gray-500 py-4 flex flex-col items-center gap-3">
+        <div className="w-full text-center text-gray-300 py-4 flex flex-col items-center gap-3">
           <div className="flex gap-2">
             <div className="w-2 h-2 bg-[#4a90a4] rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
             <div className="w-2 h-2 bg-[#4a90a4] rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
@@ -566,12 +569,15 @@ const ModeSelectScreen = () => {
 
   return (
     <div className="flex flex-col w-full max-w-md h-full py-6 px-4 animate-fade-in relative z-10">
+      {/* Overlay escuro para contraste */}
+      <div className="absolute inset-0 bg-[#0a1628]/90 -z-10 rounded-2xl"></div>
+      
       <div className="flex items-center gap-4 mb-6">
         <Button 
           variant="ghost" 
           size="icon"
           onClick={handleBackClick}
-          className="w-10 h-10 rounded-lg border border-[#3d4a5c] hover:border-[#4a90a4] text-gray-400 hover:text-[#4a90a4] transition-all"
+          className="w-10 h-10 rounded-lg border border-[#3d4a5c] hover:border-[#4a90a4] text-gray-300 hover:text-[#4a90a4] transition-all"
           data-testid="button-back-to-lobby"
           title={isHost ? "Voltar ao lobby (todos os jogadores serão levados)" : "Voltar ao lobby"}
         >
@@ -579,7 +585,7 @@ const ModeSelectScreen = () => {
         </Button>
         <div>
           <h2 className="text-2xl font-bold text-white">Escolha o Modo</h2>
-          <p className="text-gray-500 text-sm">Selecione como jogar</p>
+          <p className="text-gray-300 text-sm">Selecione como jogar</p>
         </div>
       </div>
 
@@ -591,8 +597,8 @@ const ModeSelectScreen = () => {
             className={cn(
               "w-full p-4 rounded-xl border-2 text-left transition-all duration-300",
               selectedMode === mode.id 
-                ? "border-[#4a90a4] bg-[#4a90a4]/5" 
-                : "border-[#3d4a5c] bg-[#16213e]/50 hover:border-gray-700"
+                ? "border-[#4a90a4] bg-[#4a90a4]/10" 
+                : "border-[#3d4a5c] bg-[#16213e]/80 hover:border-gray-500"
             )}
             style={selectedMode === mode.id ? { boxShadow: '0 4px 0 rgba(58, 77, 96, 0.5)' } : {}}
           >
@@ -605,7 +611,7 @@ const ModeSelectScreen = () => {
               </div>
               <div className="flex-1">
                 <h3 className="text-white font-bold text-lg">{mode.title}</h3>
-                <p className="text-gray-500 text-sm mt-1">{mode.desc}</p>
+                <p className="text-gray-300 text-sm mt-1">{mode.desc}</p>
               </div>
               {selectedMode === mode.id && (
                 <div className="w-6 h-6 rounded-full bg-[#4a90a4] flex items-center justify-center"
@@ -748,6 +754,9 @@ const PerguntasDiferentesScreen = () => {
     return (
       <>
         <div className="flex flex-col items-center justify-center w-full max-w-md h-full p-6 animate-fade-in space-y-6 relative z-10">
+          {/* Overlay escuro para contraste */}
+          <div className="absolute inset-0 bg-[#0a1628]/90 -z-10 rounded-2xl"></div>
+          
           <HomeButton inline />
           <div 
             className={cn(
@@ -762,10 +771,10 @@ const PerguntasDiferentesScreen = () => {
             {!isRevealed ? (
               <div className="flex flex-col items-center gap-4">
                 <div className="relative">
-                  <Eye className="w-20 h-20 text-gray-600" />
+                  <Eye className="w-20 h-20 text-gray-400" />
                 </div>
-                <h3 className="text-2xl font-bold text-gray-400">TOQUE PARA REVELAR</h3>
-                <p className="text-gray-600 text-sm">Veja sua pergunta</p>
+                <h3 className="text-2xl font-bold text-gray-200">TOQUE PARA REVELAR</h3>
+                <p className="text-gray-400 text-sm">Veja sua pergunta</p>
               </div>
             ) : (
               <div className="flex flex-col items-center gap-6 animate-fade-in w-full">
@@ -792,7 +801,7 @@ const PerguntasDiferentesScreen = () => {
             )}
           </div>
 
-          <p className="text-gray-600 text-sm text-center">
+          <p className="text-gray-300 text-sm text-center">
             {isRevealed ? "Toque no X para esconder" : "Toque para ver sua pergunta"}
           </p>
 
@@ -824,17 +833,20 @@ const PerguntasDiferentesScreen = () => {
     return (
       <>
         <div className="flex flex-col items-center justify-center w-full max-w-md h-full p-6 animate-fade-in space-y-6 relative z-10">
+          {/* Overlay escuro para contraste */}
+          <div className="absolute inset-0 bg-[#0a1628]/90 -z-10 rounded-2xl"></div>
+          
           <HomeButton inline />
-          <div className="w-full bg-[#16213e]/50 rounded-2xl p-6 border border-[#3d4a5c] space-y-6">
+          <div className="w-full bg-[#16213e]/80 rounded-2xl p-6 border border-[#3d4a5c] space-y-6">
             <div className="text-center space-y-2">
               <p className="text-[#4a90a4] text-sm uppercase tracking-widest font-bold">Sua Pergunta</p>
               <h2 className="text-lg text-white font-bold leading-relaxed">"{myQuestion}"</h2>
             </div>
             
-            <div className="w-full h-[1px] bg-gray-800"></div>
+            <div className="w-full h-[1px] bg-gray-700"></div>
             
             <div className="space-y-4">
-              <p className="text-gray-400 text-sm text-center">Digite sua resposta abaixo:</p>
+              <p className="text-gray-300 text-sm text-center">Digite sua resposta abaixo:</p>
               <Textarea
                 value={answer}
                 onChange={(e) => setAnswer(e.target.value)}
@@ -877,7 +889,7 @@ const PerguntasDiferentesScreen = () => {
                 <Smartphone className="w-6 h-6 rotate-90" />
                 <p className="text-sm uppercase tracking-widest font-bold">Vire o celular na horizontal</p>
               </div>
-              <p className="text-gray-500 text-xs">Mostre sua resposta para todos</p>
+              <p className="text-gray-300 text-xs">Mostre sua resposta para todos</p>
             </div>
             
             <div 
@@ -918,10 +930,13 @@ const PerguntasDiferentesScreen = () => {
     return (
       <>
         <div className="flex flex-col items-center justify-center w-full max-w-md h-full p-6 animate-fade-in space-y-6 relative z-10">
+          {/* Overlay escuro para contraste */}
+          <div className="absolute inset-0 bg-[#0a1628]/90 -z-10 rounded-2xl"></div>
+          
           <HomeButton inline />
-          <div className="w-full bg-[#16213e]/50 rounded-2xl p-6 border border-[#3d4a5c] space-y-4">
+          <div className="w-full bg-[#16213e]/80 rounded-2xl p-6 border border-[#3d4a5c] space-y-4">
             <div className="text-center space-y-2">
-              <p className="text-gray-500 text-xs uppercase tracking-widest">Sua Resposta</p>
+              <p className="text-gray-300 text-xs uppercase tracking-widest">Sua Resposta</p>
               <p className="text-xl text-white font-bold">"{savedAnswer}"</p>
             </div>
             
@@ -1138,6 +1153,9 @@ const GameScreen = () => {
 
   return (
     <div className="flex flex-col items-center justify-center w-full max-w-md h-full p-6 animate-fade-in space-y-6 relative z-10">
+      {/* Overlay escuro para contraste */}
+      <div className="absolute inset-0 bg-[#0a1628]/90 -z-10 rounded-2xl"></div>
+      
       <HomeButton inline />
       <div 
         className={cn(
@@ -1152,10 +1170,10 @@ const GameScreen = () => {
         {!isRevealed ? (
           <div className="flex flex-col items-center gap-4">
             <div className="relative">
-              <Eye className="w-20 h-20 text-gray-600" />
+              <Eye className="w-20 h-20 text-gray-400" />
             </div>
-            <h3 className="text-2xl font-bold text-gray-400">TOQUE PARA REVELAR</h3>
-            <p className="text-gray-600 text-sm">Veja sua função secreta</p>
+            <h3 className="text-2xl font-bold text-gray-200">TOQUE PARA REVELAR</h3>
+            <p className="text-gray-400 text-sm">Veja sua função secreta</p>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-6 animate-fade-in w-full">
@@ -1193,7 +1211,7 @@ const GameScreen = () => {
         )}
       </div>
 
-      <p className="text-gray-600 text-sm text-center">
+      <p className="text-gray-300 text-sm text-center">
         {isRevealed ? "Toque para esconder" : "Toque para ver sua função"}
       </p>
 
