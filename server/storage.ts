@@ -178,6 +178,18 @@ export class DatabaseStorage implements IStorage {
     return updatedRoom;
   }
 
+  async removePlayerFromRoom(code: string, playerId: string): Promise<Room | undefined> {
+    const room = this.rooms.get(code);
+    if (!room) return undefined;
+
+    const updatedRoom: Room = {
+      ...room,
+      players: room.players.filter(p => p.uid !== playerId)
+    };
+    this.rooms.set(code, updatedRoom);
+    return updatedRoom;
+  }
+
   async deleteRoom(code: string): Promise<void> {
     this.rooms.delete(code);
   }
