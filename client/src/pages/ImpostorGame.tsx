@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useGameStore, type GameModeType } from "@/lib/gameStore";
 import { Link } from "wouter";
 import PalavraSuperSecretaSubmodeScreen from "@/pages/PalavraSuperSecretaSubmodeScreen";
+import { NotificationCenter } from "@/components/NotificationCenter";
 import { 
   User, 
   Zap, 
@@ -1126,6 +1127,7 @@ export default function ImpostorGame() {
   return (
     <div className="min-h-screen w-full bg-black flex items-center justify-center font-poppins text-white overflow-hidden relative grid-bg">
       <NeonLines />
+      <NotificationCenter />
       
       <DonationButton onClick={() => setIsDonationOpen(true)} />
       <DonationModal isOpen={isDonationOpen} onClose={() => setIsDonationOpen(false)} />

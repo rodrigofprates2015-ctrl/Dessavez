@@ -56,6 +56,7 @@ export type GameState = {
   gameModes: GameMode[];
   selectedMode: GameModeType | null;
   submodeSelect: boolean;
+  notifications: Array<{ id: string; type: 'player-left' | 'host-changed'; message: string }>;
   
   setUser: (name: string) => void;
   createRoom: () => Promise<void>;
@@ -70,6 +71,8 @@ export type GameState = {
   updateRoom: (room: Room) => void;
   fetchGameModes: () => Promise<void>;
   revealQuestion: () => Promise<void>;
+  addNotification: (notification: { type: 'player-left' | 'host-changed'; message: string }) => void;
+  removeNotification: (id: string) => void;
 };
 
 function generateUID(): string {
@@ -85,6 +88,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   gameModes: [],
   selectedMode: null,
   submodeSelect: false,
+  notifications: [],
 
   setUser: (name: string) => {
     const uid = generateUID();
@@ -151,6 +155,19 @@ export const useGameStore = create<GameState>((set, get) => ({
         const data = JSON.parse(event.data);
         if (data.type === 'room-update' && data.room) {
           get().updateRoom(data.room);
+        }
+        if (data.type === 'player-left') {
+          get().addNotification({
+            type: 'player-left',
+            message: `${data.playerName} saiu da sala`
+          });
+        }
+        if (data.type === 'host-changed') {
+          get().updateRoom(get().room!);
+          get().addNotification({
+            type: 'host-changed',
+            message: `${data.newHostName} agora é o host da sala`
+          });
         }
       } catch (error) {
         console.error('WebSocket message error:', error);
@@ -312,6 +329,22 @@ export const useGameStore = create<GameState>((set, get) => ({
       ws: null,
       selectedMode: null,
     });
+  },
+
+  addNotification: (notification: { type: 'player-left' | 'host-changed'; message: string }) => {
+    const id = Date.now().toString();
+    set((state) => ({
+      notifications: [...state.notifications, { id, ...notification }]
+    }));
+    setTimeout(() => {
+      get().removeNotification(id);
+    }, 4000);
+  },
+
+  removeNotification: (id: string) => {
+    set((state) => ({
+      notifications: state.notifications.filter(n => n.id !== id)
+    }));
   },
 
   revealQuestion: async () => {

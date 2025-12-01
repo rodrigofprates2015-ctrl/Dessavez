@@ -10,6 +10,9 @@ This is a multiplayer social deduction game branded as **TikJogos**. Players joi
 - Submode cards feature image preview with rounded corners
 - Fixed "Nova Rodada" button and host back-to-lobby broadcast
 - All players automatically return to lobby when host clicks back
+- **Implemented Automatic Host Transfer** - When host disconnects, next player automatically becomes new host
+- **Added Player Feedback System** - Visual notifications when players leave or host changes (toast-style notifications in top-right corner)
+- Notifications display for 4 seconds with distinct styling (cyan for host changes, red for player departures)
 - Google AdSense auto ads enabled and working
 - Railway deployment fully functional with custom domain
 

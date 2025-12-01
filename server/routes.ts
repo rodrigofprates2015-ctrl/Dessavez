@@ -240,9 +240,21 @@ export async function registerRoutes(
         }
         playerConnections.delete(ws as any);
 
-        // Check if disconnected player was the host
         const room = await storage.getRoom(currentRoomCode);
-        if (room && currentPlayerId && room.hostId === currentPlayerId && connections && connections.size > 0) {
+        if (!room) return;
+
+        // Notify remaining players that someone left
+        const disconnectedPlayer = room.players.find(p => p.uid === currentPlayerId);
+        if (disconnectedPlayer && connections && connections.size > 0) {
+          broadcastToRoom(currentRoomCode, {
+            type: 'player-left',
+            playerId: currentPlayerId,
+            playerName: disconnectedPlayer.name
+          });
+        }
+
+        // Check if disconnected player was the host
+        if (room.hostId === currentPlayerId && connections && connections.size > 0) {
           // Host disconnected and there are still players in the room
           // Find the first remaining player to be the new host
           let newHostId: string | null = null;
@@ -273,9 +285,9 @@ export async function registerRoutes(
               const newHost = updatedRoom.players.find(p => p.uid === newHostId);
               // Broadcast the room update to all remaining players
               broadcastToRoom(currentRoomCode, { 
-                type: 'room-update', 
-                room: updatedRoom,
-                message: newHost ? `${newHost.name} agora é o host da sala!` : 'Host da sala alterado'
+                type: 'host-changed',
+                newHostId,
+                newHostName: newHost?.name
               });
             }
           }
