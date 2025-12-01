@@ -3,6 +3,12 @@
 This is a multiplayer social deduction game branded as **TikJogos**. Players join game rooms and try to identify who among them is the impostor through various game modes involving secret words, locations, roles, and questions. The application is built as a full-stack web application with real-time multiplayer capabilities.
 
 ## Recent Changes (December 2025)
+- **Added Synchronized Speaking Order Wheel Lottery** - Host can trigger lottery during gameplay to randomize speaking order
+  - Wheel spins for 3 seconds then displays order for 4 seconds
+  - Animation synchronized for ALL players via WebSocket broadcast
+  - Button "Sortear Ordem de Fala" visible only for host in game modes (except Perguntas Diferentes)
+  - Component: `SpeakingOrderWheel.tsx` with animated rotating wheel and player names
+  - WebSocket handler in server broadcasts `start-speaking-order-wheel` to all connected clients
 - **Added Palavra Secreta Submode Selection with Theme Images** - New screen for choosing themed categories with visual cards
 - Five submodes: Clássico, Clash Royale, Animes, Marvel, Stranger Things
 - Each submode has 20-30 themed words for variety
@@ -14,7 +20,7 @@ This is a multiplayer social deduction game branded as **TikJogos**. Players joi
 - **Added Player Feedback System** - Visual notifications when players leave or host changes (toast-style notifications in top-right corner)
 - Notifications display for 4 seconds with distinct styling (cyan for host changes, red for player departures)
 - Google AdSense auto ads enabled and working
-- Railway deployment fully functional with custom domain
+- Railway deployment fully functional with auto-deploy on GitHub push
 
 ## Environment Variables for Deployment (Railway, etc.)
 
