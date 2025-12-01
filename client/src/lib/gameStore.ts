@@ -187,7 +187,9 @@ export const useGameStore = create<GameState>((set, get) => ({
     newWs.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
+        console.log('WebSocket message received:', data.type);
         if (data.type === 'room-update' && data.room) {
+          console.log('WebSocket room-update, room status:', data.room.status);
           get().updateRoom(data.room);
         }
         if (data.type === 'player-left') {
@@ -223,9 +225,13 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   updateRoom: (room: Room) => {
+    console.log('updateRoom called with room status:', room.status);
     const currentUser = get().user;
     const currentRoom = get().room;
-    if (!currentUser) return;
+    if (!currentUser) {
+      console.log('updateRoom: No current user, returning early');
+      return;
+    }
 
     let newStatus: GameStatus = 'lobby';
     let enteredDuringGame = false;
@@ -242,8 +248,10 @@ export const useGameStore = create<GameState>((set, get) => ({
     // Reset selectedMode when room is reset to waiting (Nova Rodada)
     if (room.status === 'waiting') {
       selectedMode = null;
+      console.log('updateRoom: Room reset to waiting, setting status to lobby');
     }
 
+    console.log('updateRoom: Setting new status to:', newStatus);
     set({ 
       room,
       status: newStatus,
@@ -356,17 +364,32 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   returnToLobby: async () => {
     const { room } = get();
-    if (!room) return;
+    console.log('returnToLobby called, room:', room?.code);
+    if (!room) {
+      console.log('returnToLobby: No room found, returning early');
+      return;
+    }
 
     try {
+      console.log('returnToLobby: Making POST request to reset room', room.code);
       const response = await fetch(`/api/rooms/${room.code}/reset`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
 
+      console.log('returnToLobby: Response status', response.status);
       if (!response.ok) throw new Error('Failed to reset room');
       
-      set({ selectedMode: null });
+      const updatedRoom = await response.json();
+      console.log('returnToLobby: Got updated room, status:', updatedRoom?.status);
+      
+      // Force status update to lobby immediately
+      set({ 
+        selectedMode: null,
+        status: 'lobby',
+        room: updatedRoom
+      });
+      console.log('returnToLobby: Successfully reset room and status to lobby');
 
     } catch (error) {
       console.error('Error resetting room:', error);

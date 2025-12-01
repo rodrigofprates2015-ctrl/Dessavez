@@ -772,8 +772,13 @@ const PerguntasDiferentesScreen = () => {
   };
 
   const handleCloseAd = async () => {
-    // First call returnToLobby, then close the popup
-    await returnToLobby();
+    console.log('PerguntasDiferentes handleCloseAd called, room:', room?.code);
+    try {
+      await returnToLobby();
+      console.log('PerguntasDiferentes returnToLobby completed');
+    } catch (error) {
+      console.error('Error in returnToLobby:', error);
+    }
     setShowAdPopup(false);
   };
 
@@ -1051,8 +1056,13 @@ const GameScreen = () => {
   };
 
   const handleCloseAd = async () => {
-    // First call returnToLobby, then close the popup
-    await returnToLobby();
+    console.log('handleCloseAd called, room:', room?.code);
+    try {
+      await returnToLobby();
+      console.log('returnToLobby completed');
+    } catch (error) {
+      console.error('Error in returnToLobby:', error);
+    }
     setShowAdPopup(false);
   };
 
@@ -1060,12 +1070,15 @@ const GameScreen = () => {
     triggerSpeakingOrderWheel();
   };
 
+  // Store room code before any early returns
+  const roomCode = room?.code;
+  const gameMode = room?.gameMode;
+
   if (!room) return null;
 
   const isHost = room.hostId === user?.uid;
   const isImpostor = user?.uid === room.impostorId;
   const gameData = room.gameData;
-  const gameMode = room.gameMode;
 
   if (gameMode === 'perguntasDiferentes') {
     return <PerguntasDiferentesScreen />;
