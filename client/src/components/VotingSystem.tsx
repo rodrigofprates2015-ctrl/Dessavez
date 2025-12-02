@@ -124,8 +124,8 @@ export function VotingSystem({
 
   if (phase === 'voting') {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm">
-        <div className="relative w-full max-w-md bg-[#16213e]/95 rounded-2xl p-6 border border-[#3d4a5c] space-y-6">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="relative w-full max-w-md bg-[#16213e] rounded-2xl p-6 border border-[#3d4a5c] space-y-6">
           {isHost && (
             <button
               onClick={onNewRound}
@@ -187,8 +187,8 @@ export function VotingSystem({
   if (phase === 'waitingVotes') {
     const myVote = votes.find((v: PlayerVote) => v.playerId === userId);
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm">
-        <div className="relative w-full max-w-md bg-[#16213e]/95 rounded-2xl p-6 border border-[#3d4a5c] space-y-6">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="relative w-full max-w-md bg-[#16213e] rounded-2xl p-6 border border-[#3d4a5c] space-y-6">
           {isHost && (
             <button
               onClick={onNewRound}
@@ -272,10 +272,10 @@ export function VotingSystem({
     const crewWins = votesForImpostor > totalPlayers / 2;
     
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div className={cn(
           "w-full max-w-md rounded-2xl p-6 space-y-5 border-2 max-h-[90vh] overflow-y-auto",
-          "bg-[#16213e]/95 backdrop-blur-md",
+          "bg-[#16213e]",
           crewWins ? "border-[#3d8b5f]" : "border-[#c44536]"
         )}>
           <div className="space-y-3 text-center">
