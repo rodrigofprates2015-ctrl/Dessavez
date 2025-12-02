@@ -392,7 +392,13 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Room not found" });
       }
 
-      const player: Player = { uid: playerId, name: playerName };
+      // If room is already playing, mark new player as waiting for game to end
+      const isGameInProgress = room.status === 'playing';
+      const player: Player = { 
+        uid: playerId, 
+        name: playerName,
+        waitingForGame: isGameInProgress 
+      };
       const updatedRoom = await storage.addPlayerToRoom(code.toUpperCase(), player);
 
       if (updatedRoom) {

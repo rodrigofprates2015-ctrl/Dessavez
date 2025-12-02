@@ -494,14 +494,15 @@ const HomeScreen = () => {
 };
 
 const LobbyScreen = () => {
-  const { room, user, goToModeSelect, leaveGame, enteredDuringGame } = useGameStore();
+  const { room, user, goToModeSelect, leaveGame } = useGameStore();
   const { toast } = useToast();
 
   if (!room) return null;
 
   const isHost = room.hostId === user?.uid;
   const players = room.players || [];
-  const isWaitingForNextRound = enteredDuringGame && room.status === 'waiting';
+  const currentPlayer = players.find(p => p.uid === user?.uid);
+  const isWaitingForNextRound = currentPlayer?.waitingForGame === true && room.status === 'playing';
 
   const copyLink = () => {
     navigator.clipboard.writeText(window.location.origin + "/#" + room.code);

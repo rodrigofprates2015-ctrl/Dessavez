@@ -9,6 +9,7 @@ This is a multiplayer social deduction game branded as **TikJogos**. Players joi
   - Waiting players see "Aguardando partida acabar" in italics with low opacity next to their name
   - New endpoint `/api/rooms/:code/leave-game` marks player as waiting without resetting room
   - `updateRoom()` now respects `waitingForGame` flag to keep returning players in lobby view
+  - Players who join during an active game are also marked as `waitingForGame` and see the same message
 - **Added Dual Navigation Buttons for All Players** - All players (tripulantes and impostores) now have two buttons in all game modes:
   - Home button (icon): Returns to the initial home page
   - "Voltar ao Lobby" button: Returns to the lobby (shows ad first)
