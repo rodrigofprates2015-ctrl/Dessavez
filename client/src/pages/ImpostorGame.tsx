@@ -1506,88 +1506,88 @@ const PerguntasDiferentesScreen = () => {
     const crewWins = votesForImpostor > totalPlayers / 2;
     
     return (
-      <div className="flex flex-col items-center justify-center w-full max-w-md h-full p-6 animate-fade-in space-y-6 relative z-10 overflow-y-auto">
-        <div className="absolute inset-0 bg-[#0a1628]/90 -z-10 rounded-2xl"></div>
-        
-        <GameNavButtons onBackToLobby={handleNewRound} isImpostor={false} />
-        
-        <div className={cn(
-          "w-full rounded-2xl p-8 border-2 space-y-6 text-center",
-          crewWins 
-            ? "bg-gradient-to-br from-[#3d8b5f]/20 to-[#3d8b5f]/5 border-[#3d8b5f]"
-            : "bg-gradient-to-br from-[#c44536]/20 to-[#c44536]/5 border-[#c44536]"
-        )}>
-          <div className="space-y-4">
-            <div className={cn(
-              "w-20 h-20 rounded-full flex items-center justify-center mx-auto",
-              crewWins ? "bg-[#3d8b5f]" : "bg-[#c44536]"
-            )}>
-              {crewWins ? (
-                <Trophy className="w-10 h-10 text-white" />
-              ) : (
-                <Skull className="w-10 h-10 text-white" />
-              )}
+      <div className="flex flex-col items-center w-full max-w-md h-full p-4 animate-fade-in relative z-10 overflow-y-auto">
+        <div className="w-full bg-[#0a1628]/95 rounded-2xl p-6 space-y-6">
+          <GameNavButtons onBackToLobby={handleNewRound} isImpostor={false} />
+          
+          <div className={cn(
+            "w-full rounded-2xl p-6 border-2 space-y-6 text-center",
+            crewWins 
+              ? "bg-gradient-to-br from-[#3d8b5f]/20 to-[#3d8b5f]/5 border-[#3d8b5f]"
+              : "bg-gradient-to-br from-[#c44536]/20 to-[#c44536]/5 border-[#c44536]"
+          )}>
+            <div className="space-y-4">
+              <div className={cn(
+                "w-20 h-20 rounded-full flex items-center justify-center mx-auto",
+                crewWins ? "bg-[#3d8b5f]" : "bg-[#c44536]"
+              )}>
+                {crewWins ? (
+                  <Trophy className="w-10 h-10 text-white" />
+                ) : (
+                  <Skull className="w-10 h-10 text-white" />
+                )}
+              </div>
+              
+              <h2 className={cn(
+                "text-3xl font-bold",
+                crewWins ? "text-[#3d8b5f]" : "text-[#c44536]"
+              )}>
+                {crewWins ? "TRIPULACAO VENCEU!" : "IMPOSTOR VENCEU!"}
+              </h2>
+              
+              <p className="text-gray-300 text-lg">
+                O impostor era: <span className="text-[#c44536] font-bold">{impostorName}</span>
+              </p>
             </div>
             
-            <h2 className={cn(
-              "text-3xl font-bold",
-              crewWins ? "text-[#3d8b5f]" : "text-[#c44536]"
-            )}>
-              {crewWins ? "TRIPULACAO VENCEU!" : "IMPOSTOR VENCEU!"}
-            </h2>
+            <div className="w-full h-[1px] bg-gray-700"></div>
             
-            <p className="text-gray-300 text-lg">
-              O impostor era: <span className="text-[#c44536] font-bold">{impostorName}</span>
-            </p>
-          </div>
-          
-          <div className="w-full h-[1px] bg-gray-700"></div>
-          
-          <div className="space-y-4">
-            <p className="text-[#e9c46a] text-sm uppercase tracking-widest font-bold">Resultados da Votacao</p>
-            
-            <div className="space-y-2">
-              {activePlayers.map(player => {
-                const votesReceived = votes.filter((v: PlayerVote) => v.targetId === player.uid).length;
-                const isTheImpostor = player.uid === room.impostorId;
-                return (
-                  <div 
-                    key={player.uid}
-                    className={cn(
-                      "w-full p-3 rounded-lg flex items-center justify-between",
-                      isTheImpostor 
-                        ? "bg-[#c44536]/20 border border-[#c44536]/50"
-                        : "bg-[#16213e]/50"
-                    )}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className={cn(
-                        "font-bold",
-                        isTheImpostor ? "text-[#c44536]" : "text-gray-300"
-                      )}>
-                        {player.name}
-                        {isTheImpostor && " (Impostor)"}
-                      </span>
+            <div className="space-y-4">
+              <p className="text-[#e9c46a] text-sm uppercase tracking-widest font-bold">Resultados da Votacao</p>
+              
+              <div className="space-y-2">
+                {activePlayers.map(player => {
+                  const votesReceived = votes.filter((v: PlayerVote) => v.targetId === player.uid).length;
+                  const isTheImpostor = player.uid === room.impostorId;
+                  return (
+                    <div 
+                      key={player.uid}
+                      className={cn(
+                        "w-full p-3 rounded-lg flex items-center justify-between",
+                        isTheImpostor 
+                          ? "bg-[#c44536]/20 border border-[#c44536]/50"
+                          : "bg-[#16213e]/50"
+                      )}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className={cn(
+                          "font-bold",
+                          isTheImpostor ? "text-[#c44536]" : "text-gray-300"
+                        )}>
+                          {player.name}
+                          {isTheImpostor && " (Impostor)"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-[#e9c46a] font-bold">{votesReceived}</span>
+                        <span className="text-gray-500 text-sm">votos</span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <span className="text-[#e9c46a] font-bold">{votesReceived}</span>
-                      <span className="text-gray-500 text-sm">votos</span>
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           </div>
-        </div>
 
-        {isHost && (
-          <Button 
-            onClick={handleNewRound}
-            className="w-full h-14 btn-retro-primary font-bold text-lg rounded-lg transition-all"
-          >
-            <RotateCcw className="mr-2 w-5 h-5" /> Nova Rodada
-          </Button>
-        )}
+          {isHost && (
+            <Button 
+              onClick={handleNewRound}
+              className="w-full h-14 btn-retro-primary font-bold text-lg rounded-lg transition-all"
+            >
+              <RotateCcw className="mr-2 w-5 h-5" /> Nova Rodada
+            </Button>
+          )}
+        </div>
       </div>
     );
   }
