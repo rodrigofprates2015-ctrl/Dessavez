@@ -274,10 +274,19 @@ export function VotingSystem({
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div className={cn(
-          "w-full max-w-md rounded-2xl p-6 space-y-5 border-2 max-h-[90vh] overflow-y-auto",
+          "relative w-full max-w-md rounded-2xl p-6 space-y-5 border-2 max-h-[90vh] overflow-y-auto",
           "bg-[#16213e]",
           crewWins ? "border-[#3d8b5f]" : "border-[#c44536]"
         )}>
+          {!isHost && (
+            <button
+              onClick={onNewRound}
+              className="absolute -top-3 -right-3 w-10 h-10 rounded-full bg-gray-800 border border-gray-600 flex items-center justify-center hover:bg-gray-700 transition-colors z-10"
+              data-testid="button-close-result"
+            >
+              <X className="w-5 h-5 text-gray-300" />
+            </button>
+          )}
           <div className="space-y-3 text-center">
             <div className={cn(
               "w-16 h-16 rounded-full flex items-center justify-center mx-auto",
