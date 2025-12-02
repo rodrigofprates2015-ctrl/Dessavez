@@ -32,6 +32,16 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import backgroundImg from "@assets/background_1764616571362.png";
@@ -139,39 +149,84 @@ const GameNavButtons = ({
   isImpostor?: boolean;
 }) => {
   const { leaveGame } = useGameStore();
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   
   const handleGoHome = () => {
     leaveGame();
   };
 
+  const handleBackToLobbyClick = () => {
+    setShowConfirmDialog(true);
+  };
+
+  const handleConfirmBackToLobby = () => {
+    setShowConfirmDialog(false);
+    onBackToLobby();
+  };
+
   return (
-    <div className="w-full flex gap-2">
-      <Button 
-        onClick={handleGoHome}
-        size="icon"
-        className={cn(
-          "rounded-lg",
-          isImpostor 
-            ? "bg-[#4a1a1a] hover:bg-[#5a2a2a] border-2 border-red-400/50 text-red-300"
-            : "bg-[#1a4a5c] hover:bg-[#1a5a6c] border-2 border-cyan-400/50 text-cyan-300"
-        )}
-        data-testid="button-home"
-      >
-        <Home className="w-4 h-4" />
-      </Button>
-      <Button 
-        onClick={onBackToLobby}
-        className={cn(
-          "flex-1 rounded-lg",
-          isImpostor 
-            ? "bg-[#4a1a1a] hover:bg-[#5a2a2a] border-2 border-red-400/50 text-red-300"
-            : "bg-[#1a4a5c] hover:bg-[#1a5a6c] border-2 border-cyan-400/50 text-cyan-300"
-        )}
-        data-testid="button-back-lobby"
-      >
-        <ArrowLeft className="mr-2 w-4 h-4" /> Voltar ao Lobby
-      </Button>
-    </div>
+    <>
+      <div className="w-full flex gap-2">
+        <Button 
+          onClick={handleGoHome}
+          size="icon"
+          className={cn(
+            "rounded-lg",
+            isImpostor 
+              ? "bg-[#4a1a1a] hover:bg-[#5a2a2a] border-2 border-red-400/50 text-red-300"
+              : "bg-[#1a4a5c] hover:bg-[#1a5a6c] border-2 border-cyan-400/50 text-cyan-300"
+          )}
+          data-testid="button-home"
+        >
+          <Home className="w-4 h-4" />
+        </Button>
+        <Button 
+          onClick={handleBackToLobbyClick}
+          className={cn(
+            "flex-1 rounded-lg",
+            isImpostor 
+              ? "bg-[#4a1a1a] hover:bg-[#5a2a2a] border-2 border-red-400/50 text-red-300"
+              : "bg-[#1a4a5c] hover:bg-[#1a5a6c] border-2 border-cyan-400/50 text-cyan-300"
+          )}
+          data-testid="button-back-lobby"
+        >
+          <ArrowLeft className="mr-2 w-4 h-4" /> Voltar ao Lobby
+        </Button>
+      </div>
+
+      <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <AlertDialogContent className="bg-[#16213e] border-2 border-[#3d4a5c] max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-white text-center">
+              Voltar ao Lobby?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-300 text-center">
+              Tem certeza que deseja voltar ao lobby? Caso saia não conseguirá entrar na mesma partida novamente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-row gap-2 sm:justify-center">
+            <AlertDialogCancel 
+              className="flex-1 bg-[#3d4a5c] hover:bg-[#4d5a6c] text-white border-none"
+              data-testid="button-cancel-back-lobby"
+            >
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleConfirmBackToLobby}
+              className={cn(
+                "flex-1 border-none",
+                isImpostor 
+                  ? "bg-[#c44536] hover:bg-[#d45546] text-white"
+                  : "bg-[#4a90a4] hover:bg-[#5aa0b4] text-white"
+              )}
+              data-testid="button-confirm-back-lobby"
+            >
+              Confirmar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 };
 
