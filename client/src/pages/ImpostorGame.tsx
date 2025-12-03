@@ -1,9 +1,7 @@
 import { useState, useEffect } from "react";
-import { useGameStore, type GameModeType } from "@/lib/gameStore";
+import { useGameStore, type GameModeType, type PlayerVote, type PlayerAnswer } from "@/lib/gameStore";
 import { Link } from "wouter";
 import PalavraSuperSecretaSubmodeScreen from "@/pages/PalavraSuperSecretaSubmodeScreen";
-import { SpeakingOrderWheel } from "@/components/SpeakingOrderWheel";
-import { VotingSystem } from "@/components/VotingSystem";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import { SiDiscord } from "react-icons/si";
 import { 
@@ -36,7 +34,6 @@ import {
   Skull,
   Trophy
 } from "lucide-react";
-import type { PlayerAnswer, PlayerVote } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -1596,10 +1593,14 @@ const PerguntasDiferentesScreen = () => {
   return null;
 };
 
+type RoundStage = 'WORD_REVEAL' | 'SPEAKING_ORDER' | 'VOTING' | 'VOTING_FEEDBACK' | 'ROUND_RESULT';
+
 const GameScreen = () => {
   const { user, room, returnToLobby, speakingOrder, setSpeakingOrder, showSpeakingOrderWheel, setShowSpeakingOrderWheel, triggerSpeakingOrderWheel } = useGameStore();
   const [isRevealed, setIsRevealed] = useState(true);
   const [showAdPopup, setShowAdPopup] = useState(false);
+  const [currentStage, setCurrentStage] = useState<RoundStage>('WORD_REVEAL');
+  const [isSubmittingVote, setIsSubmittingVote] = useState(false);
 
   const handleNewRound = () => {
     setShowAdPopup(true);
@@ -1614,13 +1615,20 @@ const GameScreen = () => {
       console.error('Error in returnToLobby:', error);
     }
     setShowAdPopup(false);
+    setCurrentStage('WORD_REVEAL');
   };
 
   const handleStartSorteio = () => {
+    setCurrentStage('SPEAKING_ORDER');
     triggerSpeakingOrderWheel();
   };
 
-  // Store room code before any early returns
+  const handleSpeakingOrderComplete = (order: string[]) => {
+    setSpeakingOrder(order);
+    setShowSpeakingOrderWheel(false);
+    setCurrentStage('WORD_REVEAL');
+  };
+
   const roomCode = room?.code;
   const gameMode = room?.gameMode;
 
@@ -1631,13 +1639,77 @@ const GameScreen = () => {
   const gameData = room.gameData;
   
   const activePlayers = room.players.filter(p => !p.waitingForGame);
-  const votes = gameData?.votes || [];
+  const votes: PlayerVote[] = gameData?.votes || [];
   const votingStarted = gameData?.votingStarted === true;
   const votesRevealed = gameData?.votesRevealed === true;
+  const hasMyVote = votes.some(v => v.playerId === user?.uid);
+
+  useEffect(() => {
+    if (votesRevealed) {
+      setCurrentStage('ROUND_RESULT');
+    } else if (votingStarted && hasMyVote) {
+      setCurrentStage('VOTING_FEEDBACK');
+    } else if (votingStarted && !hasMyVote) {
+      setCurrentStage('VOTING');
+    } else if (showSpeakingOrderWheel) {
+      setCurrentStage('SPEAKING_ORDER');
+    } else if (!votingStarted && !votesRevealed) {
+      if (currentStage !== 'SPEAKING_ORDER') {
+        setCurrentStage('WORD_REVEAL');
+      }
+    }
+  }, [votingStarted, votesRevealed, hasMyVote, showSpeakingOrderWheel, currentStage]);
 
   if (gameMode === 'perguntasDiferentes') {
     return <PerguntasDiferentesScreen />;
   }
+
+  const handleStartVoting = async () => {
+    try {
+      await fetch(`/api/rooms/${roomCode}/start-voting`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      console.error('Error starting voting:', error);
+    }
+  };
+
+  const handleSubmitVote = async (targetId: string) => {
+    if (!user) return;
+    
+    const targetPlayer = activePlayers.find(p => p.uid === targetId);
+    if (!targetPlayer) return;
+    
+    setIsSubmittingVote(true);
+    try {
+      await fetch(`/api/rooms/${roomCode}/submit-vote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          playerId: user.uid,
+          playerName: user.name,
+          targetId: targetId,
+          targetName: targetPlayer.name
+        })
+      });
+    } catch (error) {
+      console.error('Error submitting vote:', error);
+    } finally {
+      setIsSubmittingVote(false);
+    }
+  };
+
+  const handleRevealImpostor = async () => {
+    try {
+      await fetch(`/api/rooms/${roomCode}/reveal-impostor`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      console.error('Error revealing impostor:', error);
+    }
+  };
 
   const renderCrewContent = () => {
     if (!gameData) return null;
@@ -1645,56 +1717,51 @@ const GameScreen = () => {
     switch (gameMode) {
       case 'palavraSecreta':
         return (
-          <div className="space-y-3 text-center">
+          <div className="space-y-2 text-center">
             <p className="text-cyan-300 text-xs uppercase tracking-[0.2em] font-semibold">Palavra Secreta</p>
-            <h2 className="text-3xl sm:text-4xl text-white font-black">{gameData.word}</h2>
-            <p className="text-cyan-200/70 text-sm">Dê dicas sutis sobre a palavra!</p>
+            <h2 className="text-2xl sm:text-3xl text-white font-black">{gameData.word}</h2>
+            <p className="text-cyan-200/70 text-xs">Dê dicas sutis sobre a palavra!</p>
           </div>
         );
       
       case 'palavras':
         const myRole = user?.uid ? gameData.roles?.[user.uid] : null;
         return (
-          <div className="space-y-4 text-center">
+          <div className="space-y-3 text-center">
             <div className="space-y-1">
               <p className="text-cyan-300 text-xs uppercase tracking-[0.2em] font-semibold">Local</p>
-              <h2 className="text-2xl sm:text-3xl text-white font-black">{gameData.location}</h2>
+              <h2 className="text-xl sm:text-2xl text-white font-black">{gameData.location}</h2>
             </div>
-            <div className="w-16 h-[2px] bg-cyan-400/30 mx-auto"></div>
+            <div className="w-12 h-[1px] bg-cyan-400/30 mx-auto"></div>
             <div className="space-y-1">
               <p className="text-cyan-300 text-xs uppercase tracking-[0.2em] font-semibold">Sua Função</p>
-              <h3 className="text-xl sm:text-2xl text-white font-bold">{myRole}</h3>
+              <h3 className="text-lg sm:text-xl text-white font-bold">{myRole}</h3>
             </div>
-            <p className="text-cyan-200/70 text-sm">Descreva o local de acordo com sua função!</p>
           </div>
         );
       
       case 'duasFaccoes':
         const myFaction = user?.uid ? gameData.factionMap?.[user.uid] : null;
         return (
-          <div className="space-y-3 text-center">
+          <div className="space-y-2 text-center">
             <p className="text-cyan-300 text-xs uppercase tracking-[0.2em] font-semibold">Sua Palavra</p>
-            <h2 className="text-3xl sm:text-4xl text-white font-black">{myFaction}</h2>
-            <p className="text-cyan-200/70 text-sm">
-              Existem duas palavras no jogo!<br/>
-              Descubra quem é do seu time.
-            </p>
+            <h2 className="text-2xl sm:text-3xl text-white font-black">{myFaction}</h2>
+            <p className="text-cyan-200/70 text-xs">Descubra quem é do seu time!</p>
           </div>
         );
       
       case 'categoriaItem':
         return (
-          <div className="space-y-4 text-center">
+          <div className="space-y-3 text-center">
             <div className="space-y-1">
               <p className="text-cyan-300 text-xs uppercase tracking-[0.2em] font-semibold">Categoria</p>
-              <h3 className="text-xl sm:text-2xl text-white font-bold">{gameData.category}</h3>
+              <h3 className="text-lg sm:text-xl text-white font-bold">{gameData.category}</h3>
             </div>
-            <div className="w-16 h-[2px] bg-cyan-400/30 mx-auto"></div>
+            <div className="w-12 h-[1px] bg-cyan-400/30 mx-auto"></div>
             <div className="space-y-1">
               <p className="text-cyan-300 text-xs uppercase tracking-[0.2em] font-semibold">Item</p>
-              <h2 className="text-3xl sm:text-4xl text-white font-black">{gameData.item}</h2>
+              <h2 className="text-2xl sm:text-3xl text-white font-black">{gameData.item}</h2>
             </div>
-            <p className="text-cyan-200/70 text-sm">Descreva o item de forma indireta!</p>
           </div>
         );
       
@@ -1709,44 +1776,40 @@ const GameScreen = () => {
     switch (gameMode) {
       case 'palavraSecreta':
         return (
-          <div className="space-y-2 text-center px-4">
-            <p className="text-red-200/90 text-lg font-medium leading-relaxed">
-              Finja que você sabe a palavra!<br/>
-              Engane a todos.
+          <div className="space-y-1 text-center px-4">
+            <p className="text-red-200/90 text-sm font-medium leading-relaxed">
+              Finja que você sabe a palavra! Engane a todos.
             </p>
           </div>
         );
       
       case 'palavras':
         return (
-          <div className="space-y-2 text-center px-4">
-            <p className="text-red-200/90 text-lg font-medium leading-relaxed">
-              Você não sabe o local!<br/>
-              Tente descobrir através das dicas.
+          <div className="space-y-1 text-center px-4">
+            <p className="text-red-200/90 text-sm font-medium leading-relaxed">
+              Você não sabe o local! Tente descobrir através das dicas.
             </p>
           </div>
         );
       
       case 'duasFaccoes':
         return (
-          <div className="space-y-2 text-center px-4">
-            <p className="text-red-200/90 text-lg font-medium leading-relaxed">
-              Existem duas palavras no jogo!<br/>
-              Você não sabe nenhuma delas.
+          <div className="space-y-1 text-center px-4">
+            <p className="text-red-200/90 text-sm font-medium leading-relaxed">
+              Duas palavras no jogo! Você não sabe nenhuma.
             </p>
           </div>
         );
       
       case 'categoriaItem':
         return (
-          <div className="space-y-4 text-center px-4">
+          <div className="space-y-2 text-center px-4">
             <div className="space-y-1">
               <p className="text-red-300 text-xs uppercase tracking-[0.2em] font-semibold">Categoria</p>
-              <h3 className="text-xl sm:text-2xl text-white font-bold">{gameData.category}</h3>
+              <h3 className="text-lg sm:text-xl text-white font-bold">{gameData.category}</h3>
             </div>
-            <p className="text-red-200/90 text-base font-medium leading-relaxed">
-              Você só sabe a categoria!<br/>
-              Descubra o item específico.
+            <p className="text-red-200/90 text-xs font-medium">
+              Você só sabe a categoria! Descubra o item.
             </p>
           </div>
         );
@@ -1760,160 +1823,428 @@ const GameScreen = () => {
     setShowAdPopup(true);
   };
 
+  const renderStageContent = () => {
+    switch (currentStage) {
+      case 'SPEAKING_ORDER':
+        return (
+          <div className="animate-stage-fade-in w-full flex flex-col items-center gap-4 py-4">
+            <div className="text-center space-y-2">
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#00f2ea]/10 border border-[#00f2ea]/30">
+                <Zap className="w-4 h-4 text-[#00f2ea]" />
+                <span className="text-[#00f2ea] text-xs uppercase tracking-widest font-bold">
+                  Ordem de Fala
+                </span>
+              </div>
+            </div>
+
+            <div className="relative w-32 h-32">
+              <div
+                className="w-full h-full rounded-full border-4 border-[#00f2ea]/50 flex items-center justify-center animate-spin"
+                style={{
+                  background: 'conic-gradient(from 0deg, #ff0050 0%, #00f2ea 25%, #ff0050 50%, #00f2ea 75%, #ff0050 100%)',
+                  boxShadow: '0 0 20px rgba(0, 242, 234, 0.3)',
+                  animationDuration: '1s'
+                }}
+              >
+                <div className="absolute w-12 h-12 rounded-full bg-[#0a1628] border-2 border-[#00f2ea] flex items-center justify-center">
+                  <Zap className="w-6 h-6 text-[#00f2ea]" />
+                </div>
+              </div>
+            </div>
+
+            <p className="text-gray-400 text-sm animate-pulse">
+              Sorteando ordem...
+            </p>
+
+            {speakingOrder && speakingOrder.length > 0 && (
+              <div className="w-full space-y-2 mt-2">
+                <p className="text-center text-[#00f2ea] text-xs font-bold uppercase tracking-wider">
+                  Ordem Definida
+                </p>
+                <div className="space-y-1">
+                  {speakingOrder.map((uid, idx) => {
+                    const player = room.players.find(p => p.uid === uid);
+                    return (
+                      <div
+                        key={uid}
+                        className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-[#00f2ea]/10 to-[#ff0050]/10 border border-[#00f2ea]/30 rounded-lg"
+                        style={{ animation: `stageSlideIn 0.3s ease-out ${idx * 0.1}s backwards` }}
+                      >
+                        <div className="w-6 h-6 rounded-full bg-[#00f2ea]/20 border border-[#00f2ea] flex items-center justify-center">
+                          <span className="text-[#00f2ea] font-bold text-xs">{idx + 1}</span>
+                        </div>
+                        <span className="text-white font-medium text-sm flex-1">{player?.name || 'Desconhecido'}</span>
+                        {idx === 0 && <Crown className="w-4 h-4 text-[#e9c46a]" />}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+
+      case 'VOTING':
+        return (
+          <div className="animate-stage-fade-in w-full space-y-4 py-3">
+            <div className="text-center space-y-2">
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#e9c46a]/10 border border-[#e9c46a]/30">
+                <Vote className="w-4 h-4 text-[#e9c46a]" />
+                <span className="text-[#e9c46a] text-xs uppercase tracking-widest font-bold">
+                  Hora de Votar!
+                </span>
+              </div>
+              <p className="text-gray-400 text-xs">Quem você acha que é o impostor?</p>
+            </div>
+            
+            <div className="w-full h-[1px] bg-[#3d4a5c]"></div>
+            
+            <VotingPlayerList
+              activePlayers={activePlayers}
+              userId={user?.uid || ''}
+              onSubmitVote={handleSubmitVote}
+              isSubmitting={isSubmittingVote}
+            />
+          </div>
+        );
+
+      case 'VOTING_FEEDBACK':
+        const myVote = votes.find(v => v.playerId === user?.uid);
+        const totalPlayers = activePlayers.length;
+        const votedCount = votes.length;
+        const allVoted = votedCount >= totalPlayers;
+
+        return (
+          <div className="animate-stage-fade-in w-full space-y-4 py-3">
+            <div className="text-center space-y-2">
+              <div className="w-12 h-12 rounded-full bg-[#3d8b5f]/20 border-2 border-[#3d8b5f] flex items-center justify-center mx-auto">
+                <Check className="w-6 h-6 text-[#3d8b5f]" />
+              </div>
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#3d8b5f]/10 border border-[#3d8b5f]/30">
+                <span className="text-[#3d8b5f] text-xs uppercase tracking-widest font-bold">
+                  Voto Enviado!
+                </span>
+              </div>
+              <p className="text-white text-sm">
+                Você votou em: <span className="text-[#e9c46a] font-bold">{myVote?.targetName}</span>
+              </p>
+            </div>
+            
+            <div className="w-full h-[1px] bg-[#3d4a5c]"></div>
+            
+            <div className="space-y-3">
+              <div className="flex items-center justify-center gap-2">
+                <Users className="w-4 h-4 text-[#4a90a4]" />
+                <p className="text-gray-300 text-sm">
+                  <span className="text-[#4a90a4] font-bold">{votedCount}</span> de <span className="font-bold">{totalPlayers}</span> votaram
+                </p>
+              </div>
+              
+              <div className="flex flex-wrap gap-1.5 justify-center">
+                {activePlayers.map(player => {
+                  const hasVoted = votes.some(v => v.playerId === player.uid);
+                  return (
+                    <div 
+                      key={player.uid}
+                      className={cn(
+                        "px-2 py-1 rounded-full text-xs font-medium transition-all",
+                        hasVoted 
+                          ? "bg-[#3d8b5f]/20 text-[#3d8b5f] border border-[#3d8b5f]/30"
+                          : "bg-gray-700/50 text-gray-400 border border-gray-600/30"
+                      )}
+                    >
+                      {hasVoted && <Check className="w-2.5 h-2.5 inline mr-0.5" />}
+                      {player.name}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            
+            {!allVoted && (
+              <p className="text-gray-400 text-xs text-center animate-pulse">
+                Aguardando outros jogadores votarem...
+              </p>
+            )}
+
+            {isHost && allVoted && (
+              <Button 
+                onClick={handleRevealImpostor}
+                className="w-full h-11 bg-[#c44536] hover:bg-[#c44536]/80 text-white font-bold text-sm rounded-xl transition-all"
+                style={{ boxShadow: '0 4px 0 rgba(196, 69, 54, 0.4)' }}
+                data-testid="button-reveal-impostor"
+              >
+                <Skull className="mr-2 w-4 h-4" /> Revelar o Impostor
+              </Button>
+            )}
+            
+            {!isHost && allVoted && (
+              <p className="text-[#c44536] text-xs text-center font-medium animate-pulse">
+                Aguardando o host revelar o impostor...
+              </p>
+            )}
+          </div>
+        );
+
+      case 'ROUND_RESULT':
+        const impostorPlayer = activePlayers.find(p => p.uid === room.impostorId);
+        const impostorName = impostorPlayer?.name || 'Desconhecido';
+        const votesForImpostor = votes.filter(v => v.targetId === room.impostorId).length;
+        const crewWins = votesForImpostor > activePlayers.length / 2;
+
+        return (
+          <div className="animate-stage-fade-in w-full space-y-4 py-3">
+            <div className="text-center space-y-2">
+              <div className={cn(
+                "w-14 h-14 rounded-full flex items-center justify-center mx-auto",
+                crewWins ? "bg-[#3d8b5f]" : "bg-[#c44536]"
+              )}>
+                {crewWins ? (
+                  <Trophy className="w-7 h-7 text-white" />
+                ) : (
+                  <Skull className="w-7 h-7 text-white" />
+                )}
+              </div>
+              
+              <h2 className={cn(
+                "text-lg font-bold uppercase tracking-wider",
+                crewWins ? "text-[#3d8b5f]" : "text-[#c44536]"
+              )}>
+                {crewWins ? "Tripulação Venceu!" : "Impostor Venceu!"}
+              </h2>
+              
+              <p className="text-gray-300 text-sm">
+                O impostor era: <span className="text-[#c44536] font-bold">{impostorName}</span>
+              </p>
+            </div>
+            
+            <div className="w-full h-[1px] bg-[#3d4a5c]"></div>
+            
+            <div className="space-y-2">
+              <p className="text-[#e9c46a] text-xs uppercase tracking-widest font-bold text-center">
+                Resultados da Votação
+              </p>
+              
+              <div className="space-y-1.5 max-h-[120px] overflow-y-auto scrollbar-hide">
+                {activePlayers.map(player => {
+                  const votesReceived = votes.filter(v => v.targetId === player.uid).length;
+                  const isTheImpostor = player.uid === room.impostorId;
+                  return (
+                    <div 
+                      key={player.uid}
+                      className={cn(
+                        "w-full p-2 rounded-lg flex items-center justify-between",
+                        isTheImpostor 
+                          ? "bg-[#c44536]/15 border border-[#c44536]/40"
+                          : "bg-[#16213e]/50"
+                      )}
+                    >
+                      <span className={cn(
+                        "font-bold text-xs",
+                        isTheImpostor ? "text-[#c44536]" : "text-gray-300"
+                      )}>
+                        {player.name}
+                        {isTheImpostor && " (Impostor)"}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <span className="text-[#e9c46a] font-bold text-sm">{votesReceived}</span>
+                        <span className="text-gray-500 text-xs">votos</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {isHost && (
+              <Button 
+                onClick={handleNewRound}
+                className="w-full h-11 btn-retro-primary font-bold text-sm rounded-xl transition-all"
+                data-testid="button-new-round"
+              >
+                <RotateCcw className="mr-2 w-4 h-4" /> Nova Rodada
+              </Button>
+            )}
+          </div>
+        );
+
+      case 'WORD_REVEAL':
+      default:
+        return (
+          <div className="animate-stage-fade-in w-full space-y-3 py-2">
+            {isHost ? (
+              <>
+                <Button 
+                  onClick={handleStartSorteio}
+                  className="w-full h-10 bg-[#0d4a4a] hover:bg-[#0d5a5a] border-2 border-cyan-400/50 text-cyan-300 rounded-xl font-medium text-sm"
+                  data-testid="button-sorteio"
+                >
+                  <Zap className="mr-2 w-4 h-4" /> Sortear Ordem de Fala
+                </Button>
+                <Button 
+                  onClick={handleStartVoting}
+                  className="w-full h-10 bg-[#e9c46a] hover:bg-[#e9c46a]/80 text-black font-bold rounded-xl text-sm"
+                  style={{ boxShadow: '0 3px 0 rgba(233, 196, 106, 0.4)' }}
+                  data-testid="button-start-voting"
+                >
+                  <Vote className="mr-2 w-4 h-4" /> Iniciar Votação
+                </Button>
+                <Button 
+                  onClick={handleNewRound}
+                  variant="ghost"
+                  className="w-full h-9 text-gray-400 hover:text-gray-200 rounded-xl text-sm"
+                  data-testid="button-return-lobby"
+                >
+                  <ArrowLeft className="mr-2 w-4 h-4" /> Nova Rodada
+                </Button>
+              </>
+            ) : (
+              <p className="text-gray-400 text-sm text-center py-2">
+                Aguardando o host iniciar a votação...
+              </p>
+            )}
+          </div>
+        );
+    }
+  };
+
   return (
     <div className="flex flex-col items-center w-full max-w-md min-h-full p-4 animate-fade-in space-y-3 relative z-10">
-      {/* Top Buttons - Home and Back to Lobby for all players */}
       <GameNavButtons onBackToLobby={handleBackToLobby} isImpostor={isImpostor} />
 
-      {/* Main Card */}
-      <div 
-        className={cn(
-          "w-full rounded-2xl p-6 flex flex-col items-center text-center relative transition-all duration-300 cursor-pointer",
-          isImpostor 
-            ? "bg-gradient-to-b from-[#4a1a1a] to-[#2a0a0a] border-2 border-red-500/60" 
-            : "bg-gradient-to-b from-[#0d4a4a] to-[#082828] border-2 border-cyan-400/60"
-        )}
-        onClick={() => setIsRevealed(!isRevealed)}
-        data-testid="card-reveal"
-        style={{
-          boxShadow: isImpostor 
-            ? '0 0 30px rgba(220, 38, 38, 0.2), inset 0 1px 0 rgba(255,255,255,0.1)' 
-            : '0 0 30px rgba(34, 211, 238, 0.15), inset 0 1px 0 rgba(255,255,255,0.1)'
-        }}
-      >
-        {isRevealed ? (
-          <div className="flex flex-col items-center gap-4 animate-fade-in w-full py-4">
-            {/* Character Image */}
-            <div className="relative">
-              <div 
-                className={cn(
-                  "w-24 h-24 rounded-xl overflow-hidden",
-                  isImpostor ? "bg-red-700/40" : "bg-cyan-700/40"
-                )}
-              >
-                <img 
-                  src={isImpostor ? impostorImg : tripulanteImg} 
-                  alt={isImpostor ? "Impostor" : "Tripulante"}
-                  className="w-full h-auto"
-                  style={{ transform: 'scale(1.5) translateY(18%)' }}
-                />
+      <div className="w-full card-retro p-4 space-y-4">
+        <div 
+          className={cn(
+            "w-full rounded-xl p-4 flex flex-col items-center text-center relative transition-all duration-300 cursor-pointer",
+            isImpostor 
+              ? "bg-gradient-to-b from-[#4a1a1a] to-[#2a0a0a] border border-red-500/40" 
+              : "bg-gradient-to-b from-[#0d4a4a] to-[#082828] border border-cyan-400/40"
+          )}
+          onClick={() => setIsRevealed(!isRevealed)}
+          data-testid="card-reveal"
+        >
+          {isRevealed ? (
+            <div className="flex flex-col items-center gap-3 animate-fade-in w-full py-2">
+              <div className="flex items-center gap-3">
+                <div 
+                  className={cn(
+                    "w-16 h-16 rounded-lg overflow-hidden flex-shrink-0",
+                    isImpostor ? "bg-red-700/40" : "bg-cyan-700/40"
+                  )}
+                >
+                  <img 
+                    src={isImpostor ? impostorImg : tripulanteImg} 
+                    alt={isImpostor ? "Impostor" : "Tripulante"}
+                    className="w-full h-auto"
+                    style={{ transform: 'scale(1.5) translateY(18%)' }}
+                  />
+                </div>
+                <div className="text-left">
+                  <h2 
+                    className={cn(
+                      "text-xl sm:text-2xl font-black tracking-wider uppercase",
+                      isImpostor ? "text-red-400" : "text-cyan-400"
+                    )}
+                    data-testid={isImpostor ? "text-role-impostor" : "text-role-crew"}
+                  >
+                    {isImpostor ? "IMPOSTOR" : "TRIPULANTE"}
+                  </h2>
+                </div>
+                <button 
+                  onClick={(e) => { e.stopPropagation(); setIsRevealed(false); }}
+                  className={cn(
+                    "ml-auto w-8 h-8 rounded-lg flex items-center justify-center transition-colors",
+                    isImpostor 
+                      ? "border border-red-400/30 hover:bg-red-500/20" 
+                      : "border border-cyan-400/30 hover:bg-cyan-500/20"
+                  )}
+                >
+                  <EyeOff className={cn("w-4 h-4", isImpostor ? "text-red-300/60" : "text-cyan-300/60")} />
+                </button>
               </div>
-              {/* Hide Button */}
-              <button 
-                onClick={(e) => { e.stopPropagation(); setIsRevealed(false); }}
-                className={cn(
-                  "absolute -right-12 top-1/2 -translate-y-1/2 w-10 h-10 rounded-lg flex items-center justify-center transition-colors",
-                  isImpostor 
-                    ? "border border-red-400/30 hover:bg-red-500/20" 
-                    : "border border-cyan-400/30 hover:bg-cyan-500/20"
-                )}
-              >
-                <EyeOff className={cn("w-5 h-5", isImpostor ? "text-red-300/60" : "text-cyan-300/60")} />
-              </button>
+
+              <div className="w-full">
+                {isImpostor ? renderImpostorContent() : renderCrewContent()}
+              </div>
             </div>
-
-            {/* Role Title */}
-            <h2 
-              className={cn(
-                "text-3xl sm:text-4xl font-black tracking-[0.15em] uppercase",
-                isImpostor ? "text-red-400" : "text-cyan-400"
-              )}
-              style={{ 
-                textShadow: isImpostor 
-                  ? '0 2px 10px rgba(239, 68, 68, 0.5)' 
-                  : '0 2px 10px rgba(34, 211, 238, 0.5)' 
-              }}
-              data-testid={isImpostor ? "text-role-impostor" : "text-role-crew"}
-            >
-              {isImpostor ? "IMPOSTOR" : "TRIPULANTE"}
-            </h2>
-
-            {/* Content */}
-            <div className="w-full mt-2">
-              {isImpostor ? renderImpostorContent() : renderCrewContent()}
+          ) : (
+            <div className="flex flex-col items-center gap-2 py-6">
+              <Eye className={cn(
+                "w-10 h-10",
+                isImpostor ? "text-red-400/60" : "text-cyan-400/60"
+              )} />
+              <h3 className={cn(
+                "text-base font-bold",
+                isImpostor ? "text-red-200" : "text-cyan-200"
+              )}>
+                TOQUE PARA REVELAR
+              </h3>
             </div>
-
-            {/* Tap to hide hint */}
-            <p className={cn(
-              "text-sm mt-4",
-              isImpostor ? "text-red-300/50" : "text-cyan-300/50"
-            )}>
-              Toque para esconder
-            </p>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center gap-4 py-16">
-            <Eye className={cn(
-              "w-16 h-16",
-              isImpostor ? "text-red-400/60" : "text-cyan-400/60"
-            )} />
-            <h3 className={cn(
-              "text-xl font-bold",
-              isImpostor ? "text-red-200" : "text-cyan-200"
-            )}>
-              TOQUE PARA REVELAR
-            </h3>
-            <p className={cn(
-              "text-sm",
-              isImpostor ? "text-red-300/50" : "text-cyan-300/50"
-            )}>
-              Veja sua função secreta
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* Host Buttons */}
-      {isHost && !votesRevealed && (
-        <div className="w-full space-y-2 mt-2">
-          <Button 
-            onClick={handleStartSorteio}
-            className="w-full bg-[#0d4a4a] hover:bg-[#0d5a5a] border-2 border-cyan-400/50 text-cyan-300 rounded-lg"
-            data-testid="button-sorteio"
-          >
-            <Zap className="mr-2 w-4 h-4" /> Sortear Ordem de Fala
-          </Button>
-          <Button 
-            onClick={handleNewRound}
-            className="w-full bg-[#1a2a3a] hover:bg-[#2a3a4a] border-2 border-gray-500/30 text-gray-300 rounded-lg"
-            data-testid="button-return-lobby"
-          >
-            <ArrowLeft className="mr-2 w-4 h-4" /> Nova Rodada
-          </Button>
+          )}
         </div>
-      )}
 
-      {/* Voting System */}
-      {user && room.impostorId && (
-        <VotingSystem
-          key={room.code + (gameData?.votingStarted ? '-voting' : '')}
-          roomCode={room.code}
-          userId={user.uid}
-          userName={user.name}
-          isHost={isHost}
-          activePlayers={activePlayers}
-          impostorId={room.impostorId}
-          votes={votes}
-          votingStarted={votingStarted}
-          votesRevealed={votesRevealed}
-          onNewRound={handleNewRound}
-        />
-      )}
+        <div className="w-full h-[1px] bg-[#3d4a5c]"></div>
 
-      {showSpeakingOrderWheel && room && (
-        <SpeakingOrderWheel 
-          players={room.players} 
-          onComplete={(order) => {
-            setSpeakingOrder(order);
-            setShowSpeakingOrderWheel(false);
-          }}
-          isSpinning={true}
-          serverOrder={speakingOrder}
-        />
-      )}
+        {renderStageContent()}
+      </div>
 
       <AdPopup isOpen={showAdPopup} onClose={handleCloseAd} />
     </div>
+  );
+};
+
+const VotingPlayerList = ({ 
+  activePlayers, 
+  userId, 
+  onSubmitVote, 
+  isSubmitting 
+}: { 
+  activePlayers: { uid: string; name: string }[]; 
+  userId: string; 
+  onSubmitVote: (targetId: string) => void; 
+  isSubmitting: boolean;
+}) => {
+  const [selectedVote, setSelectedVote] = useState<string | null>(null);
+
+  return (
+    <>
+      <div className="space-y-2 max-h-[200px] overflow-y-auto scrollbar-hide">
+        {activePlayers.filter(p => p.uid !== userId).map(player => (
+          <button
+            key={player.uid}
+            onClick={() => setSelectedVote(player.uid)}
+            className={cn(
+              "w-full p-2.5 rounded-xl border-2 transition-all text-left flex items-center gap-2",
+              selectedVote === player.uid
+                ? "bg-[#e9c46a]/15 border-[#e9c46a] text-[#e9c46a]"
+                : "bg-[#16213e]/50 border-[#3d4a5c] text-gray-300 hover:border-[#e9c46a]/50"
+            )}
+            data-testid={`button-vote-${player.uid}`}
+          >
+            <div className={cn(
+              "w-8 h-8 rounded-full flex items-center justify-center text-base font-bold",
+              selectedVote === player.uid ? "bg-[#e9c46a] text-black" : "bg-gray-600 text-gray-200"
+            )}>
+              {player.name.charAt(0).toUpperCase()}
+            </div>
+            <span className="font-bold text-sm">{player.name}</span>
+            {selectedVote === player.uid && (
+              <Check className="w-4 h-4 ml-auto" />
+            )}
+          </button>
+        ))}
+      </div>
+
+      <Button 
+        onClick={() => selectedVote && onSubmitVote(selectedVote)}
+        disabled={!selectedVote || isSubmitting}
+        className="w-full h-11 bg-[#e9c46a] hover:bg-[#e9c46a]/80 text-black font-bold text-sm rounded-xl transition-all disabled:opacity-30"
+        style={{ boxShadow: '0 4px 0 rgba(233, 196, 106, 0.4)' }}
+        data-testid="button-confirm-vote"
+      >
+        <Send className="mr-2 w-4 h-4" /> {isSubmitting ? 'Votando...' : 'Confirmar Voto'}
+      </Button>
+    </>
   );
 };
 

@@ -15,6 +15,19 @@ export type GameModeType =
   | "categoriaItem"
   | "perguntasDiferentes";
 
+export type PlayerVote = {
+  playerId: string;
+  playerName: string;
+  targetId: string;
+  targetName: string;
+};
+
+export type PlayerAnswer = {
+  playerId: string;
+  playerName: string;
+  answer: string;
+};
+
 export type GameData = {
   word?: string;
   location?: string;
@@ -26,6 +39,12 @@ export type GameData = {
   question?: string;
   impostorQuestion?: string;
   questionRevealed?: boolean;
+  votingStarted?: boolean;
+  votesRevealed?: boolean;
+  votes?: PlayerVote[];
+  answers?: PlayerAnswer[];
+  answersRevealed?: boolean;
+  crewQuestionRevealed?: boolean;
 };
 
 export type Room = {
