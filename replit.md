@@ -2,6 +2,12 @@
 
 This project, branded as **TikJogos**, is a multiplayer social deduction web game. Players join game rooms to identify an impostor using various game modes, including secret words, locations, roles, and unique questions. It's designed as a full-stack application with real-time capabilities. The vision is to offer an engaging, accessible social deduction experience with diverse game mechanics.
 
+## Recent Changes (December 2025)
+- **Stage-based UI**: Replaced overlapping modals with a unified single-container system using sequential stage navigation (WORD_REVEAL, SPEAKING_ORDER, VOTING, VOTING_FEEDBACK, ROUND_RESULT)
+- **Server-derived state**: Stage transitions are now derived from server-side flags (votingStarted, votesRevealed, etc.) ensuring all clients stay synchronized via WebSocket updates
+- **Inline components**: VotingSystem and SpeakingOrderWheel functionality integrated directly into GameScreen for cleaner UX
+- **Animation improvements**: Added smooth fade-in transitions between stages with CSS animations (stageFadeIn, stageSlideIn)
+
 # User Preferences
 
 Preferred communication style: Simple, everyday language.
