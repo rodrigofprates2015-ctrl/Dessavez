@@ -1,10 +1,19 @@
 import { MercadoPagoConfig, Payment } from 'mercadopago';
 
-const client = new MercadoPagoConfig({
-  accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN || '',
-});
+let _client: MercadoPagoConfig | null = null;
+let _payment: Payment | null = null;
 
-const payment = new Payment(client);
+function getPaymentClient(): Payment {
+  if (!_client) {
+    _client = new MercadoPagoConfig({
+      accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN || '',
+    });
+  }
+  if (!_payment) {
+    _payment = new Payment(_client);
+  }
+  return _payment;
+}
 
 export interface ThemeData {
   titulo: string;
@@ -32,6 +41,7 @@ export async function createPayment(themeData: ThemeData): Promise<PaymentRespon
   }
 
   try {
+    const payment = getPaymentClient();
     const idempotencyKey = `theme-${Date.now()}-${Math.random().toString(36).substring(7)}`;
     
     const paymentData = {
@@ -90,6 +100,7 @@ export async function getPaymentStatus(paymentId: number): Promise<{
   metadata?: any;
 }> {
   try {
+    const payment = getPaymentClient();
     const response = await payment.get({ id: paymentId });
     return {
       status: response.status || 'unknown',
