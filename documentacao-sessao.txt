@@ -1,0 +1,84 @@
+DOCUMENTACAO DA SESSAO - TIKJOGOS/IMPOSTOR
+==========================================
+Data: 7 de Dezembro de 2025
+
+RESUMO DO PROBLEMA INICIAL
+--------------------------
+O usuario reportou que ao tentar criar um tema no site oficial e clicar em "Gerar PIX", 
+aparecia o erro: "Mercado Pago access token not configured"
+
+DIAGNOSTICO
+-----------
+1. O codigo em server/paymentController.ts usa process.env.MERCADOPAGO_ACCESS_TOKEN
+2. A variavel nao estava configurada no Replit
+3. O usuario adicionou a variavel MERCADOPAGO_ACCESS_TOKEN no Replit
+
+PROBLEMA NO RAILWAY
+-------------------
+O Railway (plataforma de deploy) estava dando erro durante o build:
+"falha ao obter informacoes de /tmp/railpack-build-XXXX/secrets/MERCADOPAGO_ACCESS_TOKEN"
+
+Isso acontece porque o Railway usa o Railpack que tenta montar variaveis de ambiente 
+como arquivos secretos durante o build.
+
+TENTATIVAS DE CORRECAO
+----------------------
+1. Criacao de arquivos nixpacks.toml, railway.json e Procfile para configurar o build
+   - RESULTADO: Causou regressao do site para versao antiga (TikJogos ao inves de Impostor)
+   - MOTIVO: O codigo no GitHub estava desatualizado, e o Railway fez rebuild usando codigo antigo
+
+2. Remocao dos arquivos de configuracao
+   - Arquivos removidos: nixpacks.toml, railway.json, Procfile
+
+3. Correcao do paymentController.ts para lazy-loading
+   - Antes: O cliente MercadoPago era inicializado na hora do import (build time)
+   - Depois: O cliente e inicializado apenas quando as funcoes sao chamadas (runtime)
+
+4. Sincronizacao do codigo do Replit para o GitHub via API
+   - Criado script sync-to-github.ts que usa a API do GitHub (Octokit)
+   - Commits realizados: f2d9a85, 5173fdb, 32d6272
+
+5. Criacao de railway.toml para forcar uso do Nixpacks
+   - Configuracao: builder = "nixpacks"
+
+ARQUIVOS MODIFICADOS
+--------------------
+- server/paymentController.ts (lazy loading do cliente MercadoPago)
+- sync-to-github.ts (novo - script para sincronizar com GitHub via API)
+- push-github.ts (atualizado - integracao GitHub)
+- railway.toml (novo - configuracao do Railway)
+
+ESTADO ATUAL
+------------
+- Replit: Mostra versao correta (Impostor com tema de Natal)
+- GitHub: Codigo sincronizado via API
+- Railway: Ainda mostrando versao antiga devido a problemas de build
+
+SOLUCAO RECOMENDADA PARA O RAILWAY
+----------------------------------
+1. No painel do Railway, va em Settings do servico
+2. Na secao "Build", selecione "Nixpacks" como builder (nao Railpack)
+3. Certifique-se que MERCADOPAGO_ACCESS_TOKEN esta no servico da aplicacao (nao no Postgres)
+4. Faca um novo deploy manual
+
+VARIAVEIS DE AMBIENTE NECESSARIAS
+---------------------------------
+- MERCADOPAGO_ACCESS_TOKEN: Token de acesso do Mercado Pago (APP_USR-...)
+- DATABASE_URL: URL de conexao com o banco PostgreSQL
+- NODE_ENV: production (para deploy)
+- SESSION_SECRET: Chave secreta para sessoes
+
+REPOSITORIO GITHUB
+------------------
+Owner: rodrigofprates2015-ctrl
+Repo: Dessavez
+Branch: main
+
+OBSERVACOES IMPORTANTES
+-----------------------
+1. O codigo no Replit e a versao correta e funcional
+2. O problema esta no processo de build do Railway
+3. O Railpack (novo builder do Railway) tenta montar secrets como arquivos
+4. Usar Nixpacks resolve esse problema
+5. A variavel MERCADOPAGO_ACCESS_TOKEN deve estar configurada como variavel de ambiente
+   simples, nao como referencia de arquivo
