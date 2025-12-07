@@ -1,10 +1,25 @@
-export type PalavraSuperSecretaSubmode = 'classico' | 'clashRoyale' | 'animes' | 'marvel' | 'strangerThings';
+export type PalavraSuperSecretaSubmode = 'classico' | 'natal' | 'clashRoyale' | 'animes' | 'marvel' | 'strangerThings';
 
 export const PALAVRA_SECRETA_SUBMODES: Record<PalavraSuperSecretaSubmode, { title: string; desc: string; words: string[]; image?: string }> = {
   classico: {
     title: 'Clássico',
     desc: 'Palavras aleatórias',
+    image: '/submode-classico.png',
     words: ['Sol', 'Carro', 'Casa', 'Cachorro', 'Computador', 'Montanha', 'Pizza', 'Escola', 'Roupa', 'Avião', 'Janela', 'Telefone', 'Bola', 'Relógio', 'Flor', 'Gelo', 'Música', 'Prédio', 'Caminhão', 'Praia']
+  },
+  natal: {
+    title: 'Natal',
+    desc: 'Palavras natalinas e de fim de ano',
+    image: '/submode-natal.png',
+    words: [
+      'Papai Noel', 'Jesus Cristo', 'Anjo', 'Menino Jesus', 'Reis Magos', 'Elfo', 'Rena', 'Família',
+      'Árvore de Natal', 'Presentes', 'Luzes', 'Pisca-pisca', 'Estrela', 'Sino', 'Vela', 'Guirlanda',
+      'Bola de Natal', 'Presépio', 'Meia', 'Trenó', 'Chaminé', 'Boneco de neve', 'Floco de neve',
+      'Bota', 'Gorro', 'Festão', 'Ceia', 'Peru', 'Panetone', 'Rabanada', 'Uva-passa', 'Nozes',
+      'Castanha', 'Vinho quente', 'Canções natalinas', 'Cartão de Natal', 'Tradição', 'Véspera',
+      'Amor', 'Paz', 'Esperança', 'Alegria', 'União', 'Magia', 'Perdão', 'Generosidade', 'Harmonia',
+      'Fraternidade', 'Reflexão', 'Gratidão', 'Renovação'
+    ]
   },
   clashRoyale: {
     title: 'Clash Royale',

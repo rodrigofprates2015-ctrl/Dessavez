@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { pgTable, text, timestamp, jsonb, varchar, index } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, jsonb, varchar, index, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -50,6 +50,7 @@ export type Player = {
   uid: string;
   name: string;
   waitingForGame?: boolean;
+  connected?: boolean;  // Track connection status - true = connected, false = temporarily disconnected
 };
 
 export type RoomStatus = "waiting" | "playing";
@@ -59,7 +60,8 @@ export type GameModeType =
   | "palavras" 
   | "duasFaccoes"
   | "categoriaItem"
-  | "perguntasDiferentes";
+  | "perguntasDiferentes"
+  | "palavraComunidade";
 
 export type PlayerAnswer = {
   playerId: string;
@@ -92,3 +94,23 @@ export type GameData = {
   votingStarted?: boolean;
   votesRevealed?: boolean;
 };
+
+export const themes = pgTable("themes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  titulo: varchar("titulo").notNull(),
+  autor: varchar("autor").notNull(),
+  palavras: jsonb("palavras").notNull().$type<string[]>(),
+  isPublic: boolean("is_public").notNull().default(true),
+  accessCode: varchar("access_code"),
+  paymentStatus: varchar("payment_status").notNull().default("pending"),
+  approved: boolean("approved").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertThemeSchema = createInsertSchema(themes).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertTheme = z.infer<typeof insertThemeSchema>;
+export type Theme = typeof themes.$inferSelect;

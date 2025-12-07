@@ -9,6 +9,7 @@ import ImpostorGame from "@/pages/ImpostorGame";
 import PrivacyPolicy from "@/pages/PrivacyPolicy";
 import TermsOfUse from "@/pages/TermsOfUse";
 import ComoJogar from "@/pages/ComoJogar";
+import CriarTema from "@/pages/CriarTema";
 import { useAuth } from "@/hooks/useAuth";
 
 function Router() {
@@ -17,6 +18,8 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={ImpostorGame} />
+      <Route path="/criar-tema" component={CriarTema} />
+      <Route path="/oficina" component={CriarTema} />
       <Route path="/comojogar" component={ComoJogar} />
       <Route path="/como-jogar" component={ComoJogar} />
       <Route path="/privacidade" component={PrivacyPolicy} />

@@ -3,6 +3,7 @@ import { useGameStore, type GameModeType, type PlayerVote, type PlayerAnswer } f
 import { Link } from "wouter";
 import PalavraSuperSecretaSubmodeScreen from "@/pages/PalavraSuperSecretaSubmodeScreen";
 import { NotificationCenter } from "@/components/NotificationCenter";
+import { SpeakingOrderWithVotingStage } from "@/components/RoundStageContent";
 import { SiDiscord } from "react-icons/si";
 import { 
   User, 
@@ -32,7 +33,8 @@ import {
   Check,
   Vote,
   Skull,
-  Trophy
+  Trophy,
+  UserX
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,13 +51,452 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import backgroundImg from "@assets/background_1764616571362.png";
+import backgroundImg from "@assets/background_natal_1764991979853.webp";
 import logoTikjogos from "@assets/logo tikjogos_1764616571363.png";
 import logoImpostor from "@assets/logo3_1764640096962.png";
-import tripulanteImg from "@assets/Tripulante_1764616571363.png";
-import impostorImg from "@assets/impostor_1764616571362.png";
+import tripulanteImg from "@assets/tripulante_natal_1764991976186.webp";
+import impostorImg from "@assets/impostor_natal_1764991977974.webp";
 
 const PIX_KEY = "48492456-23f1-4edc-b739-4e36547ef90e";
+
+const MIN_PALAVRAS = 10;
+const MAX_PALAVRAS = 20;
+
+type ThemeWorkshopTab = 'galeria' | 'criar';
+
+type PaymentState = {
+  status: 'idle' | 'loading' | 'awaiting_payment' | 'success' | 'error';
+  paymentId?: string;
+  qrCode?: string;
+  qrCodeBase64?: string;
+  accessCode?: string;
+  error?: string;
+};
+
+const ThemeWorkshopModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
+  const { toast } = useToast();
+  const [activeTab, setActiveTab] = useState<ThemeWorkshopTab>('galeria');
+  const [publicThemes, setPublicThemes] = useState<PublicTheme[]>([]);
+  const [isLoadingThemes, setIsLoadingThemes] = useState(false);
+  
+  // Form state for creating new theme
+  const [titulo, setTitulo] = useState('');
+  const [autor, setAutor] = useState('');
+  const [palavras, setPalavras] = useState<string[]>(Array(MAX_PALAVRAS).fill(''));
+  const [isPublic, setIsPublic] = useState(true);
+  
+  // Payment state
+  const [payment, setPayment] = useState<PaymentState>({ status: 'idle' });
+  
+  // Load public themes when gallery tab is active
+  useEffect(() => {
+    if (isOpen && activeTab === 'galeria') {
+      loadPublicThemes();
+    }
+  }, [isOpen, activeTab]);
+  
+  // Poll payment status when awaiting payment
+  useEffect(() => {
+    if (payment.status !== 'awaiting_payment' || !payment.paymentId) return;
+    
+    let intervalId: NodeJS.Timeout | null = null;
+    let isActive = true;
+    
+    const pollPaymentStatus = async () => {
+      try {
+        const res = await fetch(`/api/payments/status/${payment.paymentId}`);
+        if (res.ok && isActive) {
+          const data = await res.json();
+          if (data.status === 'approved' && data.accessCode) {
+            if (intervalId) clearInterval(intervalId);
+            setPayment(prev => ({
+              ...prev,
+              status: 'success',
+              accessCode: data.accessCode
+            }));
+          }
+        }
+      } catch (err) {
+        console.error('Error polling payment status:', err);
+      }
+    };
+    
+    intervalId = setInterval(pollPaymentStatus, 5000);
+    
+    return () => {
+      isActive = false;
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [payment.status, payment.paymentId]);
+  
+  const loadPublicThemes = async () => {
+    setIsLoadingThemes(true);
+    try {
+      const res = await fetch('/api/themes/public');
+      if (res.ok) {
+        const themes = await res.json();
+        setPublicThemes(themes);
+      }
+    } catch (err) {
+      console.error('Failed to load themes:', err);
+    } finally {
+      setIsLoadingThemes(false);
+    }
+  };
+  
+  const handlePalavraChange = (index: number, value: string) => {
+    const newPalavras = [...palavras];
+    newPalavras[index] = value;
+    setPalavras(newPalavras);
+  };
+  
+  const handleCreateTheme = async () => {
+    // Validate form
+    if (!titulo.trim()) {
+      toast({ title: "Erro", description: "Digite um titulo para o tema", variant: "destructive" });
+      return;
+    }
+    if (!autor.trim()) {
+      toast({ title: "Erro", description: "Digite o nome do autor", variant: "destructive" });
+      return;
+    }
+    
+    const validPalavras = palavras.filter(p => p.trim().length > 0);
+    if (validPalavras.length < MIN_PALAVRAS) {
+      toast({ title: "Erro", description: `Digite no mínimo ${MIN_PALAVRAS} palavras (${validPalavras.length}/${MIN_PALAVRAS})`, variant: "destructive" });
+      return;
+    }
+    if (validPalavras.length > MAX_PALAVRAS) {
+      toast({ title: "Erro", description: `Máximo de ${MAX_PALAVRAS} palavras permitidas`, variant: "destructive" });
+      return;
+    }
+    
+    setPayment({ status: 'loading' });
+    
+    try {
+      const res = await fetch('/api/payments/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          titulo: titulo.trim(),
+          autor: autor.trim(),
+          palavras: validPalavras.map(p => p.trim()),
+          isPublic
+        })
+      });
+      
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Falha ao criar pagamento');
+      }
+      
+      const data = await res.json();
+      setPayment({
+        status: 'awaiting_payment',
+        paymentId: data.paymentId,
+        qrCode: data.qrCode,
+        qrCodeBase64: data.qrCodeBase64
+      });
+      
+    } catch (err: any) {
+      setPayment({ status: 'error', error: err.message });
+      toast({ title: "Erro", description: err.message, variant: "destructive" });
+    }
+  };
+  
+  const copyPixCode = () => {
+    if (payment.qrCode) {
+      navigator.clipboard.writeText(payment.qrCode);
+      toast({ title: "Copiado!", description: "Codigo PIX copiado para a area de transferencia." });
+    }
+  };
+  
+  const resetForm = () => {
+    setTitulo('');
+    setAutor('');
+    setPalavras(Array(MAX_PALAVRAS).fill(''));
+    setIsPublic(true);
+    setPayment({ status: 'idle' });
+  };
+  
+  const handleClose = () => {
+    if (payment.status !== 'loading') {
+      resetForm();
+      onClose();
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={handleClose}></div>
+      <div className="relative card-retro w-full max-w-lg max-h-[85vh] overflow-hidden animate-fade-in flex flex-col">
+        <div className="p-4 border-b border-[#3d4a5c] flex items-center justify-between">
+          <h2 className="text-xl font-bold text-[#6b4ba3] flex items-center gap-2">
+            <FileText className="w-5 h-5" />
+            Oficina de Temas
+          </h2>
+          <button 
+            onClick={handleClose}
+            className="text-gray-400 hover:text-white transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        
+        {/* Tabs */}
+        <div className="flex border-b border-[#3d4a5c]">
+          <button
+            onClick={() => setActiveTab('galeria')}
+            className={cn(
+              "flex-1 py-3 text-sm font-semibold transition-colors",
+              activeTab === 'galeria' 
+                ? "text-[#6b4ba3] border-b-2 border-[#6b4ba3]" 
+                : "text-gray-400 hover:text-white"
+            )}
+            data-testid="tab-galeria"
+          >
+            Galeria
+          </button>
+          <button
+            onClick={() => setActiveTab('criar')}
+            className={cn(
+              "flex-1 py-3 text-sm font-semibold transition-colors",
+              activeTab === 'criar' 
+                ? "text-[#6b4ba3] border-b-2 border-[#6b4ba3]" 
+                : "text-gray-400 hover:text-white"
+            )}
+            data-testid="tab-criar"
+          >
+            Criar Novo
+          </button>
+        </div>
+        
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-4">
+          {activeTab === 'galeria' && (
+            <div className="space-y-3">
+              {isLoadingThemes ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin text-[#6b4ba3]" />
+                </div>
+              ) : publicThemes.length === 0 ? (
+                <div className="text-center py-8 text-gray-400">
+                  <p>Nenhum tema disponivel ainda.</p>
+                  <p className="text-sm mt-2">Seja o primeiro a criar um!</p>
+                </div>
+              ) : (
+                publicThemes.map((theme) => (
+                  <div 
+                    key={theme.id}
+                    className="p-3 rounded-xl bg-[#16213e]/80 border border-[#3d4a5c] hover:border-[#6b4ba3] transition-colors"
+                    data-testid={`theme-${theme.id}`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="font-semibold text-white">{theme.titulo}</h3>
+                        <p className="text-xs text-gray-400">por {theme.autor}</p>
+                      </div>
+                      <span className="text-xs text-[#6b4ba3] bg-[#6b4ba3]/10 px-2 py-1 rounded">
+                        {theme.palavrasCount} palavras
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+          
+          {activeTab === 'criar' && (
+            <div className="space-y-4">
+              {payment.status === 'idle' || payment.status === 'loading' || payment.status === 'error' ? (
+                <>
+                  <div className="bg-[#16213e]/50 rounded-xl p-3 border border-[#3d4a5c]">
+                    <p className="text-sm text-gray-300 mb-2">
+                      Crie seu proprio tema com {MIN_PALAVRAS} a {MAX_PALAVRAS} palavras personalizadas!
+                    </p>
+                    <p className="text-xs text-[#e9c46a]">
+                      Valor: R$ 3,00 via PIX
+                    </p>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <input
+                      type="text"
+                      placeholder="Titulo do tema (ex: Animais da Fazenda)"
+                      value={titulo}
+                      onChange={(e) => setTitulo(e.target.value)}
+                      maxLength={50}
+                      className="input-dark w-full"
+                      data-testid="input-theme-titulo"
+                    />
+                    
+                    <input
+                      type="text"
+                      placeholder="Seu nome (autor)"
+                      value={autor}
+                      onChange={(e) => setAutor(e.target.value)}
+                      maxLength={30}
+                      className="input-dark w-full"
+                      data-testid="input-theme-autor"
+                    />
+                    
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={isPublic}
+                        onChange={(e) => setIsPublic(e.target.checked)}
+                        className="w-4 h-4 rounded bg-[#1a2a3a] border-2 border-[#4a6a8a] cursor-pointer accent-[#6b4ba3]"
+                        data-testid="checkbox-is-public"
+                      />
+                      <span className="text-sm text-[#8aa0b0]">Disponibilizar na galeria publica</span>
+                    </label>
+                    
+                    <div className="space-y-2">
+                      <p className="text-sm text-gray-300 font-medium">
+                        Palavras ({palavras.filter(p => p.trim()).length}/{MIN_PALAVRAS}-{MAX_PALAVRAS})
+                        {palavras.filter(p => p.trim()).length >= MIN_PALAVRAS && (
+                          <span className="text-green-400 ml-2">
+                            <Check className="w-4 h-4 inline" />
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        Digite entre {MIN_PALAVRAS} e {MAX_PALAVRAS} palavras
+                      </p>
+                      <div className="grid grid-cols-2 gap-2 max-h-[200px] overflow-y-auto pr-2">
+                        {palavras.map((palavra, i) => (
+                          <input
+                            key={i}
+                            type="text"
+                            placeholder={`Palavra ${i + 1}${i < MIN_PALAVRAS ? ' *' : ''}`}
+                            value={palavra}
+                            onChange={(e) => handlePalavraChange(i, e.target.value)}
+                            maxLength={30}
+                            className="input-dark text-sm py-2"
+                            data-testid={`input-palavra-${i}`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <button
+                    onClick={handleCreateTheme}
+                    disabled={payment.status === 'loading'}
+                    className="btn-orange w-full"
+                    data-testid="button-create-theme"
+                  >
+                    {payment.status === 'loading' ? (
+                      <Loader2 className="animate-spin" />
+                    ) : (
+                      <>
+                        <Zap size={20} />
+                        GERAR PIX (R$ 3,00)
+                      </>
+                    )}
+                  </button>
+                  
+                  {payment.status === 'error' && (
+                    <p className="text-sm text-red-400 text-center">{payment.error}</p>
+                  )}
+                </>
+              ) : payment.status === 'awaiting_payment' ? (
+                <div className="space-y-4 text-center">
+                  <div className="bg-[#16213e]/50 rounded-xl p-4 border border-[#3d4a5c]">
+                    <p className="text-sm text-gray-300 mb-3">
+                      Escaneie o QR Code ou copie o codigo PIX
+                    </p>
+                    
+                    {payment.qrCodeBase64 && (
+                      <div className="bg-white rounded-xl p-3 mx-auto w-fit mb-3">
+                        <img 
+                          src={`data:image/png;base64,${payment.qrCodeBase64}`}
+                          alt="QR Code PIX" 
+                          className="w-48 h-48 object-contain"
+                        />
+                      </div>
+                    )}
+                    
+                    <button
+                      onClick={copyPixCode}
+                      className="btn-green w-full"
+                      data-testid="button-copy-pix"
+                    >
+                      <Copy className="w-4 h-4" />
+                      Copiar Codigo PIX
+                    </button>
+                  </div>
+                  
+                  <div className="flex items-center justify-center gap-2 text-[#e9c46a]">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <p className="text-xs">
+                      Aguardando confirmacao do pagamento...
+                    </p>
+                  </div>
+                  
+                  <button
+                    onClick={resetForm}
+                    className="text-sm text-gray-400 hover:text-white transition-colors underline"
+                    data-testid="button-cancel-payment"
+                  >
+                    Cancelar e voltar
+                  </button>
+                </div>
+              ) : payment.status === 'success' ? (
+                <div className="space-y-4 text-center">
+                  <div className="bg-[#16213e]/50 rounded-xl p-4 border border-green-500/50">
+                    <div className="flex items-center justify-center gap-2 text-green-400 mb-3">
+                      <Check className="w-6 h-6" />
+                      <p className="text-lg font-bold">Tema criado com sucesso!</p>
+                    </div>
+                    
+                    <p className="text-sm text-gray-300 mb-4">
+                      Seu codigo de acesso:
+                    </p>
+                    
+                    <div className="bg-black/50 rounded-xl p-4 border border-[#6b4ba3]">
+                      <p className="text-2xl font-mono font-bold text-[#6b4ba3] tracking-widest" data-testid="text-access-code">
+                        {payment.accessCode}
+                      </p>
+                    </div>
+                    
+                    <button
+                      onClick={() => {
+                        if (payment.accessCode) {
+                          navigator.clipboard.writeText(payment.accessCode);
+                          toast({ title: "Copiado!", description: "Codigo de acesso copiado." });
+                        }
+                      }}
+                      className="btn-green w-full mt-3"
+                      data-testid="button-copy-access-code"
+                    >
+                      <Copy className="w-4 h-4" />
+                      Copiar Codigo
+                    </button>
+                  </div>
+                  
+                  <p className="text-xs text-gray-400">
+                    Use este codigo ao iniciar uma partida no modo Palavra Secreta para jogar com seu tema personalizado.
+                  </p>
+                  
+                  <button
+                    onClick={resetForm}
+                    className="btn-orange w-full"
+                    data-testid="button-create-another"
+                  >
+                    Criar outro tema
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const DonationModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
   const { toast } = useToast();
@@ -174,24 +615,14 @@ const GameNavButtons = ({
         <Button 
           onClick={handleGoHome}
           size="icon"
-          className={cn(
-            "rounded-lg",
-            isImpostor 
-              ? "bg-[#4a1a1a] hover:bg-[#5a2a2a] border-2 border-red-400/50 text-red-300"
-              : "bg-[#1a4a5c] hover:bg-[#1a5a6c] border-2 border-cyan-400/50 text-cyan-300"
-          )}
+          className="rounded-lg bg-gray-700 hover:bg-gray-600 border-2 border-gray-600/50 text-gray-300"
           data-testid="button-home"
         >
           <Home className="w-4 h-4" />
         </Button>
         <Button 
           onClick={handleBackToLobbyClick}
-          className={cn(
-            "flex-1 rounded-lg",
-            isImpostor 
-              ? "bg-[#4a1a1a] hover:bg-[#5a2a2a] border-2 border-red-400/50 text-red-300"
-              : "bg-[#1a4a5c] hover:bg-[#1a5a6c] border-2 border-cyan-400/50 text-cyan-300"
-          )}
+          className="flex-1 rounded-lg bg-gray-700 hover:bg-gray-600 border-2 border-gray-600/50 text-gray-300"
           data-testid="button-back-lobby"
         >
           <ArrowLeft className="mr-2 w-4 h-4" /> Voltar ao Lobby
@@ -217,12 +648,7 @@ const GameNavButtons = ({
             </AlertDialogCancel>
             <AlertDialogAction 
               onClick={handleConfirmBackToLobby}
-              className={cn(
-                "flex-1 border-none",
-                isImpostor 
-                  ? "bg-[#c44536] hover:bg-[#d45546] text-white"
-                  : "bg-[#4a90a4] hover:bg-[#5aa0b4] text-white"
-              )}
+              className="flex-1 border-none bg-white hover:bg-white/90 text-black"
               data-testid="button-confirm-back-lobby"
             >
               Confirmar
@@ -237,7 +663,7 @@ const GameNavButtons = ({
 const TopRightButtons = ({ onDonateClick }: { onDonateClick: () => void }) => (
   <>
     {/* Mobile: Como Jogar and Discord on left */}
-    <div className="sm:hidden fixed top-4 left-4 z-40 flex items-center gap-2">
+    <div className="sm:hidden fixed top-4 left-4 z-[60] flex items-center gap-2">
       <Link 
         href="/comojogar"
         className="flex items-center gap-2 px-3 py-2 bg-[#4a90a4] border-2 border-[#3a7084] rounded-xl text-white hover:bg-[#5aa0b4] transition-all font-semibold shadow-lg"
@@ -257,7 +683,7 @@ const TopRightButtons = ({ onDonateClick }: { onDonateClick: () => void }) => (
     </div>
     
     {/* Desktop: All buttons on right */}
-    <div className="hidden sm:flex fixed top-4 right-4 z-40 items-center gap-2">
+    <div className="hidden sm:flex fixed top-4 right-4 z-[60] items-center gap-2">
       <Link 
         href="/comojogar"
         className="flex items-center gap-2 px-4 py-2 bg-[#4a90a4] border-2 border-[#3a7084] rounded-xl text-white hover:bg-[#5aa0b4] transition-all font-semibold shadow-lg"
@@ -289,7 +715,7 @@ const TopRightButtons = ({ onDonateClick }: { onDonateClick: () => void }) => (
     {/* Mobile: Doar on right */}
     <button
       onClick={onDonateClick}
-      className="sm:hidden fixed top-4 right-4 z-40 flex items-center gap-2 px-4 py-2 bg-[#c44536] border-2 border-[#a33526] rounded-xl text-white hover:bg-[#d45546] transition-all font-semibold shadow-lg"
+      className="sm:hidden fixed top-4 right-4 z-[60] flex items-center gap-2 px-4 py-2 bg-[#c44536] border-2 border-[#a33526] rounded-xl text-white hover:bg-[#d45546] transition-all font-semibold shadow-lg"
       data-testid="button-donate-mobile"
     >
       <Heart className="w-4 h-4 fill-current" />
@@ -298,79 +724,6 @@ const TopRightButtons = ({ onDonateClick }: { onDonateClick: () => void }) => (
   </>
 );
 
-const AdPopup = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
-  const [countdown, setCountdown] = useState(5);
-  const [canClose, setCanClose] = useState(false);
-
-  useEffect(() => {
-    if (!isOpen) {
-      setCountdown(5);
-      setCanClose(false);
-      return;
-    }
-
-    const timer = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          setCanClose(true);
-          clearInterval(timer);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [isOpen]);
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-[#16213e]/90 backdrop-blur-sm"></div>
-      <div className="relative card-retro w-full max-w-md p-6 animate-fade-in">
-        <div className="absolute top-4 right-4">
-          {canClose ? (
-            <button 
-              onClick={onClose}
-              className="flex items-center gap-2 px-3 py-1 bg-[#3d8b5f] text-white text-sm font-bold rounded-lg hover:bg-[#3d8b5f]/80 transition-all"
-            >
-              <X className="w-4 h-4" />
-              Fechar
-            </button>
-          ) : (
-            <span className="flex items-center gap-2 px-3 py-1 bg-[#3d4a5c] text-gray-400 text-sm font-bold rounded-lg">
-              Aguarde {countdown}s
-            </span>
-          )}
-        </div>
-        
-        <div className="text-center space-y-4 pt-8">
-          <p className="text-gray-400 text-xs uppercase tracking-widest">Patrocinado</p>
-          
-          <div className="bg-[#0f0f23] border border-[#3d4a5c] rounded-xl p-6 min-h-[250px] flex flex-col items-center justify-center">
-            <div 
-              className="w-full h-full flex items-center justify-center"
-              id="ad-container-popup"
-            >
-              <div className="text-center space-y-3">
-                <div className="w-16 h-16 mx-auto rounded-xl bg-gradient-to-br from-[#e07b39]/20 to-[#4a90a4]/20 flex items-center justify-center border border-[#3d4a5c]">
-                  <img src="/tikjogos-logo.png" alt="TikJogos" className="w-12 h-auto" />
-                </div>
-                <p className="text-gray-500 text-sm">Espaco para anúncio</p>
-                <p className="text-gray-600 text-xs">Google AdSense</p>
-              </div>
-            </div>
-          </div>
-
-          <p className="text-gray-600 text-xs">
-            Os anúncios ajudam a manter o TikJogos gratuito!
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 const getModeEmoji = (modeId: string) => {
   switch (modeId) {
@@ -379,6 +732,7 @@ const getModeEmoji = (modeId: string) => {
     case 'duasFaccoes': return '⚔️';
     case 'categoriaItem': return '🎯';
     case 'perguntasDiferentes': return '🤔';
+    case 'palavraComunidade': return '👥';
     default: return '🎮';
   }
 };
@@ -440,7 +794,7 @@ const HomeScreen = () => {
 
   return (
     <div 
-      className="min-h-screen w-full flex flex-col items-center justify-center relative"
+      className="min-h-screen w-full flex flex-col items-center justify-center relative pt-20 md:pt-24"
       style={{
         backgroundImage: `url(${backgroundImg})`,
         backgroundSize: 'cover',
@@ -448,6 +802,17 @@ const HomeScreen = () => {
         backgroundRepeat: 'no-repeat'
       }}
     >
+      {/* Hero Banner - Oficina de Temas */}
+      <Link 
+        href="/criar-tema"
+        className="hero-banner"
+        data-testid="hero-banner-theme-workshop"
+      >
+        <p className="hero-banner-text-small">Divirta-se com os amigos</p>
+        <p className="hero-banner-text-main">Crie seu próprio tema</p>
+        <p className="hero-banner-text-price">Por apenas R$ 3,00</p>
+      </Link>
+
       {/* Left AdSense Banner - 160x600 */}
       <div className="hidden xl:block fixed left-2 top-1/2 -translate-y-1/2 z-30">
         <ins 
@@ -564,6 +929,7 @@ const HomeScreen = () => {
               ENTRAR
             </button>
           </div>
+
         </div>
       </div>
 
@@ -571,7 +937,7 @@ const HomeScreen = () => {
       <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 text-center z-20">
         <img src={logoTikjogos} alt="TikJogos" className="h-4 md:h-5 mx-auto mb-2" />
         <p className="text-[#6a8aaa] text-xs">
-          Desenvolvido com <Heart className="inline w-3 h-3 text-red-400 fill-current" /> por <span className="text-[#8aa0b0]">Rodrigo Freitas</span>
+          Desenvolvido com <Heart className="inline w-3 h-3 text-gray-500 fill-current" /> por <span className="text-[#8aa0b0]">Rodrigo Freitas</span>
         </p>
         <div className="flex items-center justify-center gap-2 text-xs mt-1">
           <Link href="/privacidade" className="text-[#6a8aaa] hover:text-white transition-colors">
@@ -591,8 +957,105 @@ const HomeScreen = () => {
   );
 };
 
+type PublicTheme = {
+  id: string;
+  titulo: string;
+  autor: string;
+  palavrasCount: number;
+  accessCode: string;
+  createdAt: string;
+};
+
+const CommunityThemesModal = ({ isOpen, onClose, onSelectTheme }: { isOpen: boolean; onClose: () => void; onSelectTheme: (themeId: string) => void }) => {
+  const { toast } = useToast();
+  const [publicThemes, setPublicThemes] = useState<PublicTheme[]>([]);
+  const [isLoadingThemes, setIsLoadingThemes] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      loadPublicThemes();
+    }
+  }, [isOpen]);
+
+  const loadPublicThemes = async () => {
+    setIsLoadingThemes(true);
+    try {
+      const res = await fetch('/api/themes/public');
+      if (res.ok) {
+        const themes = await res.json();
+        setPublicThemes(themes);
+      }
+    } catch (err) {
+      console.error('Failed to load themes:', err);
+      toast({ title: "Erro", description: "Falha ao carregar temas", variant: "destructive" });
+    } finally {
+      setIsLoadingThemes(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose}></div>
+      <div className="relative card-retro w-full max-w-lg max-h-[75vh] overflow-hidden animate-fade-in flex flex-col">
+        <div className="p-4 border-b border-[#3d4a5c] flex items-center justify-between">
+          <h2 className="text-xl font-bold text-[#6b4ba3] flex items-center gap-2">
+            <FileText className="w-5 h-5" />
+            Temas da Comunidade
+          </h2>
+          <button 
+            onClick={onClose}
+            className="text-gray-400 hover:text-white transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="space-y-3">
+            {isLoadingThemes ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-[#6b4ba3]" />
+              </div>
+            ) : publicThemes.length === 0 ? (
+              <div className="text-center py-8 text-gray-400">
+                <p>Nenhum tema disponível ainda.</p>
+                <p className="text-sm mt-2">Seja o primeiro a criar um!</p>
+              </div>
+            ) : (
+              publicThemes.map((theme) => (
+                <button 
+                  key={theme.id}
+                  onClick={() => {
+                    onSelectTheme(theme.id);
+                    onClose();
+                    toast({ title: "Tema selecionado!", description: `"${theme.titulo}" será usado na partida.` });
+                  }}
+                  className="w-full p-3 rounded-xl bg-[#16213e]/80 border border-[#3d4a5c] hover:border-[#6b4ba3] transition-colors text-left"
+                  data-testid={`theme-select-${theme.id}`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="font-semibold text-white truncate">{theme.titulo}</h3>
+                      <p className="text-xs text-gray-400">por {theme.autor}</p>
+                    </div>
+                    <span className="text-xs text-[#6b4ba3] bg-[#6b4ba3]/10 px-2 py-1 rounded whitespace-nowrap">
+                      {theme.palavrasCount} palavras
+                    </span>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const LobbyScreen = () => {
-  const { room, user, goToModeSelect, leaveGame } = useGameStore();
+  const { room, user, goToModeSelect, leaveGame, kickPlayer } = useGameStore();
   const { toast } = useToast();
 
   if (!room) return null;
@@ -676,6 +1139,18 @@ const LobbyScreen = () => {
                     )}
                   </div>
                 </div>
+                {isHost && !isMe && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => kickPlayer(p.uid)}
+                    className="w-8 h-8 rounded-lg border border-[#3d4a5c] hover:border-[#c44536] hover:bg-[#c44536]/10 text-gray-400 hover:text-[#c44536] transition-all"
+                    data-testid={`button-kick-${p.uid}`}
+                    title="Expulsar jogador"
+                  >
+                    <UserX className="w-4 h-4" />
+                  </Button>
+                )}
               </li>
             );
           })}
@@ -693,7 +1168,7 @@ const LobbyScreen = () => {
           <p className="text-xs text-gray-300">Você entrará quando a rodada começar</p>
         </div>
       ) : isHost ? (
-        <div className="w-full animate-fade-in">
+        <div className="w-full animate-fade-in space-y-3">
           <Button 
             onClick={goToModeSelect}
             disabled={players.length < 3}
@@ -716,6 +1191,7 @@ const LobbyScreen = () => {
           <p className="text-sm">Aguardando o capitão iniciar...</p>
         </div>
       )}
+
     </div>
   );
 };
@@ -724,12 +1200,39 @@ const ModeSelectScreen = () => {
   const { room, user, gameModes, selectedMode, selectMode, startGame, backToLobby, fetchGameModes, showSpeakingOrderWheel, speakingOrder, setSpeakingOrder, setShowSpeakingOrderWheel } = useGameStore();
   const { toast } = useToast();
   const [isStarting, setIsStarting] = useState(false);
+  const [communityThemes, setCommunityThemes] = useState<PublicTheme[]>([]);
+  const [isLoadingThemes, setIsLoadingThemes] = useState(false);
+  const [selectedThemeCode, setSelectedThemeCode] = useState<string | null>(null);
 
   const isHost = room && user && room.hostId === user.uid;
 
   useEffect(() => {
     fetchGameModes();
   }, [fetchGameModes]);
+
+  useEffect(() => {
+    if (selectedMode === 'palavraComunidade') {
+      loadCommunityThemes();
+    } else {
+      setSelectedThemeCode(null);
+    }
+  }, [selectedMode]);
+
+  const loadCommunityThemes = async () => {
+    setIsLoadingThemes(true);
+    try {
+      const res = await fetch('/api/themes/public');
+      if (res.ok) {
+        const themes = await res.json();
+        setCommunityThemes(themes);
+      }
+    } catch (err) {
+      console.error('Failed to load themes:', err);
+      toast({ title: "Erro", description: "Falha ao carregar temas", variant: "destructive" });
+    } finally {
+      setIsLoadingThemes(false);
+    }
+  };
 
   const handleStartGameWithSorteio = async () => {
     if (!selectedMode || !room) return;
@@ -739,6 +1242,18 @@ const ModeSelectScreen = () => {
     // Se é modo de perguntas diferentes, pula sorteio
     if (selectedMode === 'perguntasDiferentes') {
       await startGame();
+      setIsStarting(false);
+      return;
+    }
+    
+    // Se é palavraComunidade, precisa ter um tema selecionado
+    if (selectedMode === 'palavraComunidade') {
+      if (!selectedThemeCode) {
+        toast({ title: "Selecione um tema", description: "Escolha um tema da comunidade para jogar", variant: "destructive" });
+        setIsStarting(false);
+        return;
+      }
+      await startGame(selectedThemeCode);
       setIsStarting(false);
       return;
     }
@@ -814,11 +1329,61 @@ const ModeSelectScreen = () => {
             </div>
           </button>
         ))}
+        
+        {selectedMode === 'palavraComunidade' && (
+          <div className="mt-4 pt-4 border-t border-[#3d4a5c]">
+            <h3 className="text-white font-bold mb-3 flex items-center gap-2">
+              <Users className="w-4 h-4 text-[#4a90a4]" />
+              Escolha um tema da comunidade
+            </h3>
+            {isLoadingThemes ? (
+              <div className="flex items-center justify-center py-6">
+                <Loader2 className="w-6 h-6 animate-spin text-[#4a90a4]" />
+              </div>
+            ) : communityThemes.length === 0 ? (
+              <div className="text-center py-6 text-gray-400">
+                <p>Nenhum tema disponivel ainda.</p>
+                <p className="text-sm mt-2">Crie um na Oficina de Temas!</p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                {communityThemes.map((theme) => (
+                  <button
+                    key={theme.id}
+                    onClick={() => setSelectedThemeCode(theme.accessCode)}
+                    className={cn(
+                      "w-full p-3 rounded-xl border-2 text-left transition-all",
+                      selectedThemeCode === theme.accessCode
+                        ? "border-[#6b4ba3] bg-[#6b4ba3]/10"
+                        : "border-[#3d4a5c] bg-[#16213e]/60 hover:border-gray-500"
+                    )}
+                    data-testid={`button-theme-${theme.id}`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-semibold text-white truncate">{theme.titulo}</h4>
+                        <p className="text-xs text-gray-400 truncate">por {theme.autor}</p>
+                      </div>
+                      <span className="text-xs text-[#6b4ba3] bg-[#6b4ba3]/10 px-2 py-1 rounded shrink-0">
+                        {theme.palavrasCount} palavras
+                      </span>
+                      {selectedThemeCode === theme.accessCode && (
+                        <div className="w-5 h-5 rounded-full bg-[#6b4ba3] flex items-center justify-center shrink-0">
+                          <Check className="w-3 h-3 text-white" />
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <Button 
         onClick={handleStartGameWithSorteio}
-        disabled={!selectedMode || isStarting}
+        disabled={!selectedMode || isStarting || (selectedMode === 'palavraComunidade' && !selectedThemeCode)}
         className="w-full h-16 btn-retro-primary font-bold text-lg rounded-lg transition-all active:scale-[0.98] disabled:opacity-30 disabled:cursor-not-allowed"
       >
         <Rocket className="mr-2" /> INICIAR PARTIDA
@@ -849,19 +1414,19 @@ const QuestionRevealedOverlay = ({
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#16213e]/95 backdrop-blur-sm animate-fade-in">
       <div className="w-full max-w-md space-y-6">
-        <div className="w-full bg-gradient-to-br from-[#c44536]/10 to-[#c44536]/5 rounded-2xl p-6 border border-[#c44536]/30 space-y-4">
+        <div className="w-full bg-gradient-to-br from-gray-700/20 to-gray-700/5 rounded-2xl p-6 border border-gray-600/30 space-y-4">
           <div className="text-center space-y-2">
-            <div className="w-16 h-16 mx-auto rounded-xl border-2 border-[#c44536] flex items-center justify-center mb-4"
-                 style={{ boxShadow: '0 4px 0 rgba(196, 69, 54, 0.5)' }}>
-              <Eye className="w-8 h-8 text-[#c44536]" />
+            <div className="w-16 h-16 mx-auto rounded-xl border-2 border-gray-600 flex items-center justify-center mb-4"
+                 style={{ boxShadow: '0 4px 0 rgba(128, 128, 128, 0.2)' }}>
+              <Eye className="w-8 h-8 text-gray-400" />
             </div>
-            <p className="text-[#c44536] text-sm uppercase tracking-widest font-bold">Pergunta dos Tripulantes</p>
+            <p className="text-gray-400 text-sm uppercase tracking-widest font-bold">Pergunta dos Tripulantes</p>
             <p className="text-2xl text-white font-bold leading-relaxed">"{crewQuestion}"</p>
           </div>
           
           {isImpostor && questionsDiffer && (
-            <div className="text-center pt-4 border-t border-[#c44536]/20 space-y-2">
-              <p className="text-[#c44536] text-lg font-bold animate-pulse">
+            <div className="text-center pt-4 border-t border-gray-600/20 space-y-2">
+              <p className="text-gray-400 text-lg font-bold animate-pulse">
                 Sua pergunta era diferente!
               </p>
               <p className="text-gray-400 text-sm">
@@ -871,8 +1436,8 @@ const QuestionRevealedOverlay = ({
           )}
           
           {!isImpostor && (
-            <div className="text-center pt-4 border-t border-[#4a90a4]/20">
-              <p className="text-[#4a90a4] text-sm">
+            <div className="text-center pt-4 border-t border-gray-600/20">
+              <p className="text-gray-400 text-sm">
                 Descubra quem recebeu uma pergunta diferente!
               </p>
             </div>
@@ -1281,15 +1846,15 @@ const PerguntasDiferentesScreen = () => {
         {isHost && (
           <Button 
             onClick={handleRevealCrewQuestion}
-            className="w-full h-14 bg-[#c44536] hover:bg-[#c44536]/80 text-white font-bold text-lg rounded-lg transition-all"
-            style={{ boxShadow: '0 4px 0 rgba(196, 69, 54, 0.5)' }}
+            className="w-full h-14 bg-white hover:bg-white/80 text-black font-bold text-lg rounded-lg transition-all"
+            style={{ boxShadow: '0 4px 0 rgba(255, 255, 255, 0.2)' }}
           >
             <Eye className="mr-2 w-5 h-5" /> Revelar Pergunta dos Tripulantes
           </Button>
         )}
         
         {!isHost && (
-          <p className="text-[#c44536] text-sm text-center font-medium animate-pulse">
+          <p className="text-gray-400 text-sm text-center font-medium animate-pulse">
             Aguardando o host revelar a pergunta dos tripulantes...
           </p>
         )}
@@ -1304,14 +1869,14 @@ const PerguntasDiferentesScreen = () => {
         
         <GameNavButtons onBackToLobby={handleNewRound} isImpostor={false} />
         
-        <div className="w-full bg-gradient-to-br from-[#c44536]/10 to-[#c44536]/5 rounded-2xl p-6 border border-[#c44536]/30 space-y-4">
+        <div className="w-full bg-gradient-to-br from-gray-700/20 to-gray-700/5 rounded-2xl p-6 border border-gray-600/30 space-y-4">
           <div className="text-center space-y-2">
-            <p className="text-[#c44536] text-xs uppercase tracking-widest font-bold">Pergunta dos Tripulantes</p>
+            <p className="text-gray-400 text-xs uppercase tracking-widest font-bold">Pergunta dos Tripulantes</p>
             <p className="text-xl text-white font-bold leading-relaxed">"{crewQuestion}"</p>
           </div>
           {isImpostor && (
-            <div className="text-center pt-4 border-t border-[#c44536]/20">
-              <p className="text-[#c44536] text-sm font-medium">
+            <div className="text-center pt-4 border-t border-gray-600/20">
+              <p className="text-gray-400 text-sm font-medium">
                 Sua pergunta era diferente! Tente se justificar!
               </p>
             </div>
@@ -1508,17 +2073,9 @@ const PerguntasDiferentesScreen = () => {
         <div className="w-full bg-[#0a1628]/95 rounded-2xl p-6 space-y-6">
           <GameNavButtons onBackToLobby={handleNewRound} isImpostor={false} />
           
-          <div className={cn(
-            "w-full rounded-2xl p-6 border-2 space-y-6 text-center",
-            crewWins 
-              ? "bg-gradient-to-br from-[#3d8b5f]/20 to-[#3d8b5f]/5 border-[#3d8b5f]"
-              : "bg-gradient-to-br from-[#c44536]/20 to-[#c44536]/5 border-[#c44536]"
-          )}>
+          <div className="w-full rounded-2xl p-6 border-2 space-y-6 text-center bg-gradient-to-br from-gray-700/20 to-gray-700/5 border-gray-600">
             <div className="space-y-4">
-              <div className={cn(
-                "w-20 h-20 rounded-full flex items-center justify-center mx-auto",
-                crewWins ? "bg-[#3d8b5f]" : "bg-[#c44536]"
-              )}>
+              <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto bg-gray-600">
                 {crewWins ? (
                   <Trophy className="w-10 h-10 text-white" />
                 ) : (
@@ -1526,15 +2083,12 @@ const PerguntasDiferentesScreen = () => {
                 )}
               </div>
               
-              <h2 className={cn(
-                "text-3xl font-bold",
-                crewWins ? "text-[#3d8b5f]" : "text-[#c44536]"
-              )}>
+              <h2 className="text-3xl font-bold text-white">
                 {crewWins ? "TRIPULACAO VENCEU!" : "IMPOSTOR VENCEU!"}
               </h2>
               
               <p className="text-gray-300 text-lg">
-                O impostor era: <span className="text-[#c44536] font-bold">{impostorName}</span>
+                O impostor era: <span className="text-gray-400 font-bold">{impostorName}</span>
               </p>
             </div>
             
@@ -1598,22 +2152,14 @@ type RoundStage = 'WORD_REVEAL' | 'SPEAKING_ORDER' | 'VOTING' | 'VOTING_FEEDBACK
 const GameScreen = () => {
   const { user, room, returnToLobby, speakingOrder, setSpeakingOrder, showSpeakingOrderWheel, setShowSpeakingOrderWheel, triggerSpeakingOrderWheel } = useGameStore();
   const [isRevealed, setIsRevealed] = useState(true);
-  const [showAdPopup, setShowAdPopup] = useState(false);
   const [isSubmittingVote, setIsSubmittingVote] = useState(false);
 
-  const handleNewRound = () => {
-    setShowAdPopup(true);
-  };
-
-  const handleCloseAd = async () => {
-    console.log('handleCloseAd called, room:', room?.code);
+  const handleNewRound = async () => {
     try {
       await returnToLobby();
-      console.log('returnToLobby completed');
     } catch (error) {
       console.error('Error in returnToLobby:', error);
     }
-    setShowAdPopup(false);
   };
 
   const handleStartSorteio = () => {
@@ -1714,9 +2260,9 @@ const GameScreen = () => {
       case 'palavraSecreta':
         return (
           <div className="space-y-2 text-center">
-            <p className="text-cyan-300 text-xs uppercase tracking-[0.2em] font-semibold">Palavra Secreta</p>
+            <p className="text-gray-400 text-xs uppercase tracking-[0.2em] font-semibold">Palavra Secreta</p>
             <h2 className="text-2xl sm:text-3xl text-white font-black">{gameData.word}</h2>
-            <p className="text-cyan-200/70 text-xs">Dê dicas sutis sobre a palavra!</p>
+            <p className="text-gray-400 text-xs">Dê dicas sutis sobre a palavra!</p>
           </div>
         );
       
@@ -1725,12 +2271,12 @@ const GameScreen = () => {
         return (
           <div className="space-y-3 text-center">
             <div className="space-y-1">
-              <p className="text-cyan-300 text-xs uppercase tracking-[0.2em] font-semibold">Local</p>
+              <p className="text-gray-400 text-xs uppercase tracking-[0.2em] font-semibold">Local</p>
               <h2 className="text-xl sm:text-2xl text-white font-black">{gameData.location}</h2>
             </div>
-            <div className="w-12 h-[1px] bg-cyan-400/30 mx-auto"></div>
+            <div className="w-12 h-[1px] bg-gray-600/30 mx-auto"></div>
             <div className="space-y-1">
-              <p className="text-cyan-300 text-xs uppercase tracking-[0.2em] font-semibold">Sua Função</p>
+              <p className="text-gray-400 text-xs uppercase tracking-[0.2em] font-semibold">Sua Função</p>
               <h3 className="text-lg sm:text-xl text-white font-bold">{myRole}</h3>
             </div>
           </div>
@@ -1740,9 +2286,9 @@ const GameScreen = () => {
         const myFaction = user?.uid ? gameData.factionMap?.[user.uid] : null;
         return (
           <div className="space-y-2 text-center">
-            <p className="text-cyan-300 text-xs uppercase tracking-[0.2em] font-semibold">Sua Palavra</p>
+            <p className="text-gray-400 text-xs uppercase tracking-[0.2em] font-semibold">Sua Palavra</p>
             <h2 className="text-2xl sm:text-3xl text-white font-black">{myFaction}</h2>
-            <p className="text-cyan-200/70 text-xs">Descubra quem é do seu time!</p>
+            <p className="text-gray-400 text-xs">Descubra quem é do seu time!</p>
           </div>
         );
       
@@ -1750,14 +2296,23 @@ const GameScreen = () => {
         return (
           <div className="space-y-3 text-center">
             <div className="space-y-1">
-              <p className="text-cyan-300 text-xs uppercase tracking-[0.2em] font-semibold">Categoria</p>
+              <p className="text-gray-400 text-xs uppercase tracking-[0.2em] font-semibold">Categoria</p>
               <h3 className="text-lg sm:text-xl text-white font-bold">{gameData.category}</h3>
             </div>
-            <div className="w-12 h-[1px] bg-cyan-400/30 mx-auto"></div>
+            <div className="w-12 h-[1px] bg-gray-600/30 mx-auto"></div>
             <div className="space-y-1">
-              <p className="text-cyan-300 text-xs uppercase tracking-[0.2em] font-semibold">Item</p>
+              <p className="text-gray-400 text-xs uppercase tracking-[0.2em] font-semibold">Item</p>
               <h2 className="text-2xl sm:text-3xl text-white font-black">{gameData.item}</h2>
             </div>
+          </div>
+        );
+      
+      case 'palavraComunidade':
+        return (
+          <div className="space-y-2 text-center">
+            <p className="text-gray-400 text-xs uppercase tracking-[0.2em] font-semibold">Palavra Secreta</p>
+            <h2 className="text-2xl sm:text-3xl text-white font-black">{gameData.word}</h2>
+            <p className="text-gray-400 text-xs">Dê dicas sutis sobre a palavra!</p>
           </div>
         );
       
@@ -1773,7 +2328,7 @@ const GameScreen = () => {
       case 'palavraSecreta':
         return (
           <div className="space-y-1 text-center px-4">
-            <p className="text-red-200/90 text-sm font-medium leading-relaxed">
+            <p className="text-gray-400 text-sm font-medium leading-relaxed">
               Finja que você sabe a palavra! Engane a todos.
             </p>
           </div>
@@ -1782,7 +2337,7 @@ const GameScreen = () => {
       case 'palavras':
         return (
           <div className="space-y-1 text-center px-4">
-            <p className="text-red-200/90 text-sm font-medium leading-relaxed">
+            <p className="text-gray-400 text-sm font-medium leading-relaxed">
               Você não sabe o local! Tente descobrir através das dicas.
             </p>
           </div>
@@ -1791,7 +2346,7 @@ const GameScreen = () => {
       case 'duasFaccoes':
         return (
           <div className="space-y-1 text-center px-4">
-            <p className="text-red-200/90 text-sm font-medium leading-relaxed">
+            <p className="text-gray-400 text-sm font-medium leading-relaxed">
               Duas palavras no jogo! Você não sabe nenhuma.
             </p>
           </div>
@@ -1801,11 +2356,20 @@ const GameScreen = () => {
         return (
           <div className="space-y-2 text-center px-4">
             <div className="space-y-1">
-              <p className="text-red-300 text-xs uppercase tracking-[0.2em] font-semibold">Categoria</p>
+              <p className="text-gray-400 text-xs uppercase tracking-[0.2em] font-semibold">Categoria</p>
               <h3 className="text-lg sm:text-xl text-white font-bold">{gameData.category}</h3>
             </div>
-            <p className="text-red-200/90 text-xs font-medium">
+            <p className="text-gray-400 text-xs font-medium">
               Você só sabe a categoria! Descubra o item.
+            </p>
+          </div>
+        );
+      
+      case 'palavraComunidade':
+        return (
+          <div className="space-y-1 text-center px-4">
+            <p className="text-gray-400 text-sm font-medium leading-relaxed">
+              Finja que você sabe a palavra! Engane a todos.
             </p>
           </div>
         );
@@ -1815,69 +2379,28 @@ const GameScreen = () => {
     }
   };
 
-  const handleBackToLobby = () => {
-    setShowAdPopup(true);
+  const handleBackToLobby = async () => {
+    try {
+      await returnToLobby();
+    } catch (error) {
+      console.error('Error in returnToLobby:', error);
+    }
   };
 
   const renderStageContent = () => {
     switch (currentStage) {
       case 'SPEAKING_ORDER':
         return (
-          <div className="animate-stage-fade-in w-full flex flex-col items-center gap-4 py-4">
-            <div className="text-center space-y-2">
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#00f2ea]/10 border border-[#00f2ea]/30">
-                <Zap className="w-4 h-4 text-[#00f2ea]" />
-                <span className="text-[#00f2ea] text-xs uppercase tracking-widest font-bold">
-                  Ordem de Fala
-                </span>
-              </div>
-            </div>
-
-            <div className="relative w-32 h-32">
-              <div
-                className="w-full h-full rounded-full border-4 border-[#00f2ea]/50 flex items-center justify-center animate-spin"
-                style={{
-                  background: 'conic-gradient(from 0deg, #ff0050 0%, #00f2ea 25%, #ff0050 50%, #00f2ea 75%, #ff0050 100%)',
-                  boxShadow: '0 0 20px rgba(0, 242, 234, 0.3)',
-                  animationDuration: '1s'
-                }}
-              >
-                <div className="absolute w-12 h-12 rounded-full bg-[#0a1628] border-2 border-[#00f2ea] flex items-center justify-center">
-                  <Zap className="w-6 h-6 text-[#00f2ea]" />
-                </div>
-              </div>
-            </div>
-
-            <p className="text-gray-400 text-sm animate-pulse">
-              Sorteando ordem...
-            </p>
-
-            {speakingOrder && speakingOrder.length > 0 && (
-              <div className="w-full space-y-2 mt-2">
-                <p className="text-center text-[#00f2ea] text-xs font-bold uppercase tracking-wider">
-                  Ordem Definida
-                </p>
-                <div className="space-y-1">
-                  {speakingOrder.map((uid, idx) => {
-                    const player = room.players.find(p => p.uid === uid);
-                    return (
-                      <div
-                        key={uid}
-                        className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-[#00f2ea]/10 to-[#ff0050]/10 border border-[#00f2ea]/30 rounded-lg"
-                        style={{ animation: `stageSlideIn 0.3s ease-out ${idx * 0.1}s backwards` }}
-                      >
-                        <div className="w-6 h-6 rounded-full bg-[#00f2ea]/20 border border-[#00f2ea] flex items-center justify-center">
-                          <span className="text-[#00f2ea] font-bold text-xs">{idx + 1}</span>
-                        </div>
-                        <span className="text-white font-medium text-sm flex-1">{player?.name || 'Desconhecido'}</span>
-                        {idx === 0 && <Crown className="w-4 h-4 text-[#e9c46a]" />}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
+          <SpeakingOrderWithVotingStage
+            players={activePlayers}
+            serverOrder={speakingOrder}
+            userId={user?.uid || ''}
+            isHost={isHost}
+            onStartVoting={handleStartVoting}
+            onSubmitVote={handleSubmitVote}
+            isSubmitting={isSubmittingVote}
+            onNewRound={handleNewRound}
+          />
         );
 
       case 'VOTING':
@@ -2072,7 +2595,7 @@ const GameScreen = () => {
               <>
                 <Button 
                   onClick={handleStartSorteio}
-                  className="w-full h-10 bg-[#0d4a4a] hover:bg-[#0d5a5a] border-2 border-cyan-400/50 text-cyan-300 rounded-xl font-medium text-sm"
+                  className="w-full h-10 bg-white hover:bg-white/80 border-2 border-white/40 text-black rounded-xl font-medium text-sm"
                   data-testid="button-sorteio"
                 >
                   <Zap className="mr-2 w-4 h-4" /> Sortear Ordem de Fala
@@ -2110,12 +2633,7 @@ const GameScreen = () => {
 
       <div className="w-full card-retro p-4 space-y-4">
         <div 
-          className={cn(
-            "w-full rounded-xl p-4 flex flex-col items-center text-center relative transition-all duration-300 cursor-pointer",
-            isImpostor 
-              ? "bg-gradient-to-b from-[#4a1a1a] to-[#2a0a0a] border border-red-500/40" 
-              : "bg-gradient-to-b from-[#0d4a4a] to-[#082828] border border-cyan-400/40"
-          )}
+          className="w-full rounded-xl p-4 flex flex-col items-center text-center relative transition-all duration-300 cursor-pointer bg-gradient-to-b from-[#2a2a3a] to-[#1a1a2a] border border-gray-600/40"
           onClick={() => setIsRevealed(!isRevealed)}
           data-testid="card-reveal"
         >
@@ -2123,10 +2641,7 @@ const GameScreen = () => {
             <div className="flex flex-col items-center gap-3 animate-fade-in w-full py-2">
               <div className="flex items-center gap-3">
                 <div 
-                  className={cn(
-                    "w-16 h-16 rounded-lg overflow-hidden flex-shrink-0",
-                    isImpostor ? "bg-red-700/40" : "bg-cyan-700/40"
-                  )}
+                  className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-gray-700/40"
                 >
                   <img 
                     src={isImpostor ? impostorImg : tripulanteImg} 
@@ -2137,10 +2652,7 @@ const GameScreen = () => {
                 </div>
                 <div className="text-left">
                   <h2 
-                    className={cn(
-                      "text-xl sm:text-2xl font-black tracking-wider uppercase",
-                      isImpostor ? "text-red-400" : "text-cyan-400"
-                    )}
+                    className="text-xl sm:text-2xl font-black tracking-wider uppercase text-gray-200"
                     data-testid={isImpostor ? "text-role-impostor" : "text-role-crew"}
                   >
                     {isImpostor ? "IMPOSTOR" : "TRIPULANTE"}
@@ -2148,15 +2660,10 @@ const GameScreen = () => {
                 </div>
                 <button 
                   onClick={(e) => { e.stopPropagation(); setIsRevealed(false); }}
-                  className={cn(
-                    "ml-auto w-8 h-8 rounded-lg flex items-center justify-center transition-colors",
-                    isImpostor 
-                      ? "border border-red-400/30 hover:bg-red-500/20" 
-                      : "border border-cyan-400/30 hover:bg-cyan-500/20"
-                  )}
+                  className="ml-auto w-8 h-8 rounded-lg flex items-center justify-center transition-colors border border-gray-600/30 hover:bg-gray-500/20"
                   data-testid="button-hide-role"
                 >
-                  <EyeOff className={cn("w-4 h-4", isImpostor ? "text-red-300/60" : "text-cyan-300/60")} />
+                  <EyeOff className="w-4 h-4 text-gray-400/60" />
                 </button>
               </div>
 
@@ -2166,14 +2673,8 @@ const GameScreen = () => {
             </div>
           ) : (
             <div className="flex flex-col items-center gap-2 py-6">
-              <Eye className={cn(
-                "w-10 h-10",
-                isImpostor ? "text-red-400/60" : "text-cyan-400/60"
-              )} />
-              <h3 className={cn(
-                "text-base font-bold",
-                isImpostor ? "text-red-200" : "text-cyan-200"
-              )}>
+              <Eye className="w-10 h-10 text-gray-400/60" />
+              <h3 className="text-base font-bold text-gray-300">
                 TOQUE PARA REVELAR
               </h3>
             </div>
@@ -2185,7 +2686,6 @@ const GameScreen = () => {
         {renderStageContent()}
       </div>
 
-      <AdPopup isOpen={showAdPopup} onClose={handleCloseAd} />
     </div>
   );
 };

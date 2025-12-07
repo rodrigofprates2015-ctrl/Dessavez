@@ -1,6 +1,12 @@
 import { execSync } from 'child_process';
 
+let connectionSettings: any;
+
 async function getAccessToken() {
+  if (connectionSettings && connectionSettings.settings?.expires_at && new Date(connectionSettings.settings.expires_at).getTime() > Date.now()) {
+    return connectionSettings.settings.access_token;
+  }
+  
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
   const xReplitToken = process.env.REPL_IDENTITY 
     ? 'repl ' + process.env.REPL_IDENTITY 
@@ -23,7 +29,7 @@ async function getAccessToken() {
   );
   
   const data = await response.json();
-  const connectionSettings = data.items?.[0];
+  connectionSettings = data.items?.[0];
   const accessToken = connectionSettings?.settings?.access_token || connectionSettings?.settings?.oauth?.credentials?.access_token;
 
   if (!accessToken) {

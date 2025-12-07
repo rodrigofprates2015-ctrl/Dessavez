@@ -1,8 +1,28 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* GT America Compressed Bold Italic - using fallback if font not available */
+@font-face {
+  font-family: 'GT America Compressed';
+  font-weight: 700;
+  font-style: italic;
+  src: local('GT America Compressed Bold Italic'), local('GTAmericaCompressed-BoldItalic');
+  font-display: swap;
+}
+
+/* GT America Compressed Medium Italic - for smaller banner text */
+@font-face {
+  font-family: 'GT America Compressed Medium';
+  font-weight: 500;
+  font-style: italic;
+  src: local('GT America Compressed Medium Italic'), local('GTAmericaCompressed-MediumItalic');
+  font-display: swap;
+}
+
 @theme inline {
+  --font-gt-america-medium: "GT America Compressed Medium", "Impact", "Arial Narrow", sans-serif;
   --font-poppins: "Poppins", sans-serif;
+  --font-gt-america: "GT America Compressed", "Impact", "Arial Narrow", sans-serif;
   
   /* Color Palette matching the mockup */
   --color-background: 210 60% 35%;
@@ -408,5 +428,70 @@
   .mode-card.selected {
     border-color: #e8a045;
     box-shadow: 0 0 15px rgba(232, 160, 69, 0.3);
+  }
+
+  /* Hero Banner - Oficina de Temas */
+  .hero-banner {
+    background-color: #e5486f;
+    padding: 1rem 1.5rem;
+    text-align: center;
+    width: 100%;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 50;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+  }
+
+  .hero-banner:hover {
+    background-color: #d93d62;
+  }
+
+  .hero-banner-text-small {
+    font-family: var(--font-gt-america-medium);
+    font-size: 0.875rem;
+    font-weight: 500;
+    font-style: italic;
+    color: white;
+    margin-bottom: 0.25rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .hero-banner-text-main {
+    font-family: var(--font-gt-america);
+    font-size: 1.75rem;
+    font-weight: 700;
+    font-style: italic;
+    color: #511a27;
+    line-height: 1.1;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+
+  .hero-banner-text-price {
+    font-family: var(--font-poppins);
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: white;
+    margin-top: 0.25rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  @media (min-width: 768px) {
+    .hero-banner {
+      padding: 1.25rem 2rem;
+    }
+    .hero-banner-text-small {
+      font-size: 1rem;
+    }
+    .hero-banner-text-main {
+      font-size: 2.5rem;
+    }
+    .hero-banner-text-price {
+      font-size: 1rem;
+    }
   }
 }

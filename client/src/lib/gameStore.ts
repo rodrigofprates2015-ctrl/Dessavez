@@ -13,7 +13,8 @@ export type GameModeType =
   | "palavras" 
   | "duasFaccoes"
   | "categoriaItem"
-  | "perguntasDiferentes";
+  | "perguntasDiferentes"
+  | "palavraComunidade";
 
 export type PlayerVote = {
   playerId: string;
@@ -76,8 +77,9 @@ export type GameState = {
   gameModes: GameMode[];
   selectedMode: GameModeType | null;
   submodeSelect: boolean;
-  notifications: Array<{ id: string; type: 'player-left' | 'host-changed'; message: string }>;
+  notifications: Array<{ id: string; type: 'player-left' | 'player-joined' | 'player-reconnected' | 'host-changed' | 'disconnected' | 'player-kicked' | 'player-removed'; message: string }>;
   enteredDuringGame: boolean;
+  isDisconnected: boolean;
   savedNickname: string | null;
   speakingOrder: string[] | null;
   showSpeakingOrderWheel: boolean;
@@ -89,7 +91,7 @@ export type GameState = {
   createRoom: () => Promise<void>;
   joinRoom: (code: string) => Promise<boolean>;
   selectMode: (mode: GameModeType) => void;
-  startGame: () => Promise<void>;
+  startGame: (themeCode?: string) => Promise<void>;
   returnToLobby: () => Promise<void>;
   leaveCurrentGame: () => Promise<void>;
   leaveGame: () => void;
@@ -102,8 +104,10 @@ export type GameState = {
   setSpeakingOrder: (order: string[]) => void;
   setShowSpeakingOrderWheel: (show: boolean) => void;
   triggerSpeakingOrderWheel: () => void;
-  addNotification: (notification: { type: 'player-left' | 'host-changed'; message: string }) => void;
+  addNotification: (notification: { type: 'player-left' | 'player-joined' | 'player-reconnected' | 'host-changed' | 'disconnected' | 'player-kicked' | 'player-removed'; message: string }) => void;
   removeNotification: (id: string) => void;
+  setDisconnected: (disconnected: boolean) => void;
+  kickPlayer: (targetPlayerId: string) => void;
 };
 
 function generateUID(): string {
@@ -121,6 +125,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   submodeSelect: false,
   notifications: [],
   enteredDuringGame: false,
+  isDisconnected: false,
   savedNickname: null,
   speakingOrder: null,
   showSpeakingOrderWheel: false,
@@ -201,23 +206,31 @@ export const useGameStore = create<GameState>((set, get) => ({
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const newWs = new WebSocket(`${protocol}//${window.location.host}/game-ws`);
     
-    let pingInterval: ReturnType<typeof setInterval> | null = null;
     let reconnectAttempts = 0;
     const maxReconnectAttempts = 10;
-    const reconnectDelay = 2000;
+    let visibilityHandler: (() => void) | null = null;
 
-    const startPing = () => {
-      if (pingInterval) clearInterval(pingInterval);
-      pingInterval = setInterval(() => {
-        if (newWs.readyState === WebSocket.OPEN) {
-          newWs.send(JSON.stringify({ type: 'ping' }));
-        }
-      }, 25000);
+    // Exponential backoff for reconnection: 1.5s, 3s, 5s, 8s, 13s...
+    const getReconnectDelay = (attempt: number): number => {
+      const delays = [1500, 3000, 5000, 8000, 13000, 21000, 30000, 30000, 30000, 30000];
+      return delays[Math.min(attempt, delays.length - 1)];
+    };
+
+    const sendSyncRequest = () => {
+      if (newWs.readyState === WebSocket.OPEN) {
+        newWs.send(JSON.stringify({ type: 'sync_request' }));
+        console.log('[Sync] Sent sync_request to server');
+      }
     };
 
     const attemptReconnect = () => {
       if (reconnectAttempts >= maxReconnectAttempts) {
         console.log('Max reconnect attempts reached');
+        get().setDisconnected(true);
+        get().addNotification({
+          type: 'disconnected',
+          message: 'Conexão perdida. Recarregue a página para reconectar.'
+        });
         return;
       }
       
@@ -225,24 +238,126 @@ export const useGameStore = create<GameState>((set, get) => ({
       if (!currentRoom) return;
       
       reconnectAttempts++;
-      console.log(`Attempting to reconnect (${reconnectAttempts}/${maxReconnectAttempts})...`);
+      const delay = getReconnectDelay(reconnectAttempts - 1);
+      console.log(`Attempting to reconnect (${reconnectAttempts}/${maxReconnectAttempts}) in ${delay}ms...`);
       
       setTimeout(() => {
         get().connectWebSocket(currentRoom.code);
-      }, reconnectDelay);
+      }, delay);
     };
+
+    // Handle tab visibility changes - send sync when tab becomes visible
+    visibilityHandler = () => {
+      if (document.visibilityState === 'visible' && newWs.readyState === WebSocket.OPEN) {
+        console.log('[Visibility] Tab became visible, sending sync_request');
+        sendSyncRequest();
+      }
+    };
+    document.addEventListener('visibilitychange', visibilityHandler);
+
+    // Also sync when window regains focus
+    const focusHandler = () => {
+      if (newWs.readyState === WebSocket.OPEN) {
+        console.log('[Focus] Window regained focus, sending sync_request');
+        sendSyncRequest();
+      }
+    };
+    window.addEventListener('focus', focusHandler);
+
+    // Send disconnect_notice when browser/tab is being closed (hard exit detection)
+    // This notifies the server IMMEDIATELY so other players see the disconnect right away
+    const sendDisconnectNotice = () => {
+      if (newWs.readyState === WebSocket.OPEN) {
+        try {
+          newWs.send(JSON.stringify({ type: 'disconnect_notice' }));
+          console.log('[Disconnect] Sent disconnect_notice via WebSocket');
+        } catch (e) {
+          console.error('[Disconnect] Failed to send disconnect_notice:', e);
+        }
+      }
+    };
+
+    // sendBeacon with proper JSON content type for reliable delivery during page unload
+    const sendDisconnectBeacon = () => {
+      const currentUser = get().user;
+      const currentRoom = get().room;
+      if (currentUser && currentRoom && navigator.sendBeacon) {
+        try {
+          const blob = new Blob(
+            [JSON.stringify({ playerId: currentUser.uid })],
+            { type: 'application/json' }
+          );
+          const sent = navigator.sendBeacon(
+            `/api/rooms/${currentRoom.code}/disconnect-notice`,
+            blob
+          );
+          console.log('[Disconnect] Sent beacon disconnect notice, success:', sent);
+        } catch (e) {
+          console.error('[Disconnect] Failed to send beacon:', e);
+        }
+      }
+    };
+
+    // Track if we've already sent a disconnect to avoid duplicates
+    let disconnectSent = false;
+    
+    // Combined handler that tries both methods for maximum reliability
+    const handleDisconnect = (eventName: string) => {
+      if (disconnectSent) {
+        console.log(`[Disconnect] ${eventName}: Already sent disconnect, skipping`);
+        return;
+      }
+      disconnectSent = true;
+      console.log(`[Disconnect] ${eventName}: Sending disconnect via both methods`);
+      
+      // Try WebSocket first (fast but unreliable during unload)
+      sendDisconnectNotice();
+      
+      // Also send via sendBeacon (reliable but slightly slower)
+      sendDisconnectBeacon();
+    };
+
+    // beforeunload - fires when user closes tab/browser or navigates away
+    const beforeUnloadHandler = () => {
+      handleDisconnect('beforeunload');
+    };
+    window.addEventListener('beforeunload', beforeUnloadHandler);
+
+    // pagehide - more reliable on mobile and some browsers
+    const pageHideHandler = (event: PageTransitionEvent) => {
+      console.log('[Disconnect] pagehide triggered, persisted:', event.persisted);
+      // Only send if page is NOT being cached (persisted = false means true unload)
+      if (!event.persisted) {
+        handleDisconnect('pagehide');
+      }
+    };
+    window.addEventListener('pagehide', pageHideHandler);
+    
+    // unload - last resort fallback
+    const unloadHandler = () => {
+      handleDisconnect('unload');
+    };
+    window.addEventListener('unload', unloadHandler);
 
     newWs.onopen = () => {
       console.log('WebSocket connected');
       reconnectAttempts = 0;
+      get().setDisconnected(false);
       newWs.send(JSON.stringify({ type: 'join-room', roomCode: code, playerId: user?.uid }));
-      startPing();
+      // Request current room state on connection
+      sendSyncRequest();
     };
 
     newWs.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        if (data.type === 'pong') return;
+        
+        // Respond to server ping with pong immediately
+        if (data.type === 'ping') {
+          newWs.send(JSON.stringify({ type: 'pong' }));
+          return;
+        }
+        
         console.log('WebSocket message received:', data.type);
         if (data.type === 'room-update' && data.room) {
           console.log('WebSocket room-update, room status:', data.room.status);
@@ -254,11 +369,49 @@ export const useGameStore = create<GameState>((set, get) => ({
             message: `${data.playerName} saiu da sala`
           });
         }
+        if (data.type === 'player-disconnected') {
+          get().addNotification({
+            type: 'player-reconnected',  // Using reconnected type as a connection status indicator
+            message: `${data.playerName} desconectou temporariamente`
+          });
+        }
+        if (data.type === 'player-reconnected') {
+          get().addNotification({
+            type: 'player-reconnected',
+            message: `${data.playerName} reconectou`
+          });
+        }
         if (data.type === 'host-changed') {
           get().updateRoom(get().room!);
           get().addNotification({
             type: 'host-changed',
             message: `${data.newHostName} agora é o host da sala`
+          });
+        }
+        if (data.type === 'player-kicked') {
+          get().addNotification({
+            type: 'player-kicked',
+            message: `${data.playerName} foi expulso da sala`
+          });
+        }
+        if (data.type === 'player-removed') {
+          get().addNotification({
+            type: 'player-removed',
+            message: `${data.playerName} foi removido da sala (desconectado por muito tempo)`
+          });
+        }
+        if (data.type === 'kicked') {
+          // Current player was kicked from the room
+          get().addNotification({
+            type: 'player-kicked',
+            message: data.message || 'Você foi expulso da sala pelo host'
+          });
+          // Leave the room and go back to home
+          set({ 
+            room: null, 
+            ws: null, 
+            status: 'home', 
+            selectedMode: null 
           });
         }
         if (data.type === 'start-speaking-order-wheel') {
@@ -274,11 +427,21 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     newWs.onerror = (error) => {
       console.error('WebSocket error:', error);
+      // Close and trigger reconnect on error
+      newWs.close();
     };
 
     newWs.onclose = (event) => {
       console.log('WebSocket closed:', event.code, event.reason);
-      if (pingInterval) clearInterval(pingInterval);
+      
+      // Cleanup event listeners
+      if (visibilityHandler) {
+        document.removeEventListener('visibilitychange', visibilityHandler);
+      }
+      window.removeEventListener('focus', focusHandler);
+      window.removeEventListener('beforeunload', beforeUnloadHandler);
+      window.removeEventListener('pagehide', pageHideHandler);
+      window.removeEventListener('unload', unloadHandler);
       
       const currentRoom = get().room;
       if (currentRoom && event.code !== 1000) {
@@ -417,7 +580,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
   },
 
-  startGame: async () => {
+  startGame: async (themeCode?: string) => {
     const { room, selectedMode } = get();
     if (!room || !selectedMode) return;
 
@@ -430,6 +593,15 @@ export const useGameStore = create<GameState>((set, get) => ({
         if (submode) {
           requestBody.selectedSubmode = submode;
         }
+        // Add custom theme code if provided
+        if (themeCode && themeCode.trim()) {
+          requestBody.themeCode = themeCode.trim().toUpperCase();
+        }
+      }
+      
+      // If Palavra Comunidade, add the theme code
+      if (selectedMode === 'palavraComunidade' && themeCode && themeCode.trim()) {
+        requestBody.themeCode = themeCode.trim().toUpperCase();
       }
 
       const response = await fetch(`/api/rooms/${room.code}/start`, {
@@ -522,6 +694,15 @@ export const useGameStore = create<GameState>((set, get) => ({
   leaveGame: () => {
     const ws = get().ws;
     if (ws) {
+      // Send intentional leave message before closing (hard exit)
+      if (ws.readyState === WebSocket.OPEN) {
+        try {
+          ws.send(JSON.stringify({ type: 'leave' }));
+          console.log('[Leave] Sent intentional leave message');
+        } catch (e) {
+          console.error('[Leave] Failed to send leave message:', e);
+        }
+      }
       ws.close();
     }
     
@@ -533,19 +714,38 @@ export const useGameStore = create<GameState>((set, get) => ({
     });
   },
 
-  addNotification: (notification: { type: 'player-left' | 'host-changed'; message: string }) => {
+  addNotification: (notification: { type: 'player-left' | 'player-joined' | 'player-reconnected' | 'host-changed' | 'disconnected' | 'player-kicked' | 'player-removed'; message: string }) => {
     const id = Date.now().toString();
     set((state) => ({
       notifications: [...state.notifications, { id, ...notification }]
     }));
+    const timeout = notification.type === 'disconnected' ? 10000 : 4000;
     setTimeout(() => {
       get().removeNotification(id);
-    }, 4000);
+    }, timeout);
   },
 
   removeNotification: (id: string) => {
     set((state) => ({
       notifications: state.notifications.filter(n => n.id !== id)
+    }));
+  },
+
+  kickPlayer: (targetPlayerId: string) => {
+    const { room, ws, user } = get();
+    if (!room || !user || !ws || ws.readyState !== WebSocket.OPEN) return;
+    
+    // Only host can kick
+    if (room.hostId !== user.uid) return;
+    
+    // Cannot kick yourself
+    if (targetPlayerId === user.uid) return;
+    
+    ws.send(JSON.stringify({
+      type: 'kick-player',
+      roomCode: room.code,
+      targetPlayerId,
+      requesterId: user.uid
     }));
   },
 
@@ -586,5 +786,9 @@ export const useGameStore = create<GameState>((set, get) => ({
       type: 'trigger-speaking-order',
       roomCode: room.code
     }));
+  },
+
+  setDisconnected: (disconnected: boolean) => {
+    set({ isDisconnected: disconnected });
   }
 }));
